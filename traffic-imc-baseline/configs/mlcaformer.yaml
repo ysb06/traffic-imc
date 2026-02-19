@@ -1,0 +1,40 @@
+path_config_file: "../../traffic-imc-dataset/configs/config_mice.yaml"
+
+run:
+  name_key: "mice"
+  code: 0
+  seed: null
+
+datamodule:
+  train_val_split: 0.8
+  in_steps: 24
+  out_steps: 1
+  steps_per_day: 24
+  batch_size: 4
+  num_workers: 0
+  shuffle_training: true
+  scale_method: "normal"
+
+model:
+  input_dim: 3
+  output_dim: 1
+  input_embedding_dim: 24
+  tod_embedding_dim: 24
+  dow_embedding_dim: 24
+  nid_embedding_dim: 24
+  col_embedding_dim: 80
+  feed_forward_dim: 256
+  num_heads: 4
+  num_layers: 3
+  dropout: 0.1
+  learning_rate: 0.001
+  scheduler_factor: 0.5
+  scheduler_patience: 10
+
+early_stopping:
+  enabled: true
+  patience: 5
+
+trainer:
+  max_epochs: 100
+  gradient_clip_val: 1.0

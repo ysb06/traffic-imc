@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "traffic-imc-dataset"
+		},
+		{
+			"path": "traffic-imc-baseline"
+		}
+	],
+	"settings": {}
+}

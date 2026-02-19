@@ -1,0 +1,36 @@
+path_config_file: "../../traffic-imc-dataset/configs/config_mice.yaml"
+
+run:
+  name_key: "mice"
+  code: 0
+  seed: null
+
+datamodule:
+  train_val_split: 0.8
+  n_his: 24
+  n_pred: 1
+  batch_size: 64
+  num_workers: 0
+  shuffle_training: true
+
+model:
+  learning_rate: 0.001
+  scheduler_factor: 0.95
+  scheduler_patience: 10
+  dropout_rate: 0.5
+  Kt: 3
+  stblock_num: 2
+  Ks: 3
+  act_func: "glu"
+  graph_conv_type: "graph_conv"
+  gso_type: "sym_norm_lap"
+  force_symmetric: true
+  enable_bias: true
+
+early_stopping:
+  enabled: true
+  patience: 20
+
+trainer:
+  max_epochs: 100
+  gradient_clip_val: 1.0

@@ -1,0 +1,33 @@
+[project]
+name = "traffic-imc-baseline"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [
+    {name = "Seungbin Yim", email = "ysb06@hotmail.com"},
+]
+dependencies = [
+    "lightning>=2.6.1",
+    "torch>=2.10.0",
+    "numpy>=2.4.2",
+    "pandas>=3.0.0",
+    "pyyaml>=6.0",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.14.0",
+    "tqdm>=4.67.3",
+    "tables>=3.10.2",
+    "wandb>=0.25.0",
+]
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "MIT"}
+
+[project.scripts]
+traffic-imc = "traffic_imc_baseline.cli:main"
+
+[tool.pdm]
+distribution = false
+
+[tool.pdm.dev-dependencies]
+dev = [
+    "-e file:///${PROJECT_ROOT}/../traffic-imc-dataset#egg=traffic-imc-dataset",
+]

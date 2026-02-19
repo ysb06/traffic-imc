@@ -1,0 +1,41 @@
+# Raw data paths configuration
+root_dir: "../datasets/metr-imc/subsets/knn_v1"
+
+# Core files
+dataset:
+  dir: "."
+  filenames:
+    metr_imc: "metr-imc.h5"
+    metr_imc_missing: "metr-imc-missing.h5"
+    metr_imc_training: "metr-imc-training.h5"
+    metr_imc_training_missing: "metr-imc-training-missing.h5"
+    metr_imc_test: "metr-imc-test.h5" 
+    metr_imc_test_missing: "metr-imc-test-missing.h5"
+    sensor_ids: "metr_ids.txt"
+    metadata: "metadata.h5"
+    sensor_locations: "graph_sensor_locations.csv"
+    distances: "distances_imc.csv"
+    adjacency_matrix: "adj_mx.pkl"
+
+# Nodelink data
+nodelink:
+  dir: "nodelink"
+  filenames:
+    node: "imc_node.shp"
+    link: "imc_link.shp"
+    turn: "imc_turninfo.dbf"
+
+# IMCRTS data
+imcrts:
+  dir: "imcrts"
+  filenames:
+    data: "imcrts_data.pkl"
+
+# Miscellaneous files
+misc:
+  dir: "miscellaneous"
+  filenames:
+    imcrts_excel: "imcrts_data.xlsx"
+    metr_excel: "metr-imc.xlsx"
+    metr_shape: "metr_imc.shp"
+    distances_shape: "distances_imc.shp"

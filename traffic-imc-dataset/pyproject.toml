@@ -1,0 +1,37 @@
+[project]
+name = "traffic-imc-dataset"
+version = "0.1.0"
+description = "Default template for PDM package"
+authors = [{ name = "Seungbin Yim", email = "sbyim@stanford.edu" }]
+dependencies = [
+    "torch>=2.10.0",
+    "numpy>=2.4.2",
+    "pandas>=3.0.0",
+    "pyyaml>=6.0.3",
+    "pypots>=1.1",
+    "scikit-learn>=1.8.0",
+    "scipy>=1.14.0",
+    "networkx>=3.5",
+    "geopandas>=1.1.2",
+    "shapely>=2.1.2",
+    "requests>=2.32.5",
+    "tqdm>=4.67.3",
+    "joblib>=1.5.3",
+    "holidays>=0.83",
+    "tables>=3.10.2",
+    "openpyxl>=3.1.5",
+]
+requires-python = ">=3.11"
+readme = "README.md"
+license = { text = "MIT" }
+
+[project.scripts]
+traffic-imc-dataset = "traffic_imc_dataset.__main__:main"
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+
+[tool.pdm]
+distribution = true
