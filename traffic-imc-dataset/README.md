@@ -35,21 +35,30 @@ pip install -e .
 Inject API key directly at runtime (Recommended)
 
 ```bash
-traffic-imc-dataset --api-key "YOUR_DATA_API_KEY"
+traffic-imc-dataset --api-key "YOUR_DATA_API_KEY" --config-dir ./configs
 ```
 
 ```bash
-python -m traffic_imc_dataset --api-key "YOUR_DATA_API_KEY"
+python -m traffic_imc_dataset --api-key "YOUR_DATA_API_KEY" --config-dir ./configs
 ```
 
 Or use environment variable
 
 ```bash
 export DATA_API_KEY="YOUR_DATA_API_KEY"
-traffic-imc-dataset
+traffic-imc-dataset --config-dir ./configs
 ```
 
 ```bash
 export DATA_API_KEY="YOUR_DATA_API_KEY"
-python -m traffic_imc_dataset
+python -m traffic_imc_dataset --config-dir ./configs
 ```
+
+`--config-dir` is optional and defaults to `./configs`.
+
+## Use Pre-generated Dataset
+
+If you want to skip API collection and preprocessing, you can download the pre-generated dataset:
+
+- Download link: [Google Drive (pre-generated METR-IMC dataset)](https://drive.google.com/drive/folders/1xgilXK2-ojll5PGKSm4-QfKtO335t04q?usp=sharing)
+- Place the downloaded `metr-imc` folder at `./datasets/metr-imc` in the project root.

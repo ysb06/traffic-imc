@@ -27,14 +27,10 @@ from .nodelink.downloader import download_nodelink
 from .utils import PathConfig
 
 logger = logging.getLogger(__name__)
-PATH_CONF = PathConfig.from_yaml("./configs/config.yaml")
-PATH_CONF.create_directories()
 
 
 # Other Settings
-NODELINK_RAW_URL = (
-    "https://www.its.go.kr/opendata/nodelinkFileSDownload/DF_180/0"  # 2022-12-28
-)
+NODELINK_RAW_URL = "https://www.its.go.kr/opendata/nodelinkFileSDownload/DF_180/0"
 TARGET_REGION_CODES = [
     "161",
     "162",
@@ -51,61 +47,54 @@ IMCRTS_END_DATE = "20260115"
 TRAINING_END_DATE = "2025-11-30 23:59:59"
 
 
-# def generate_subset_dataset(
-#     target_nodelink: list[str],
-#     save_dir_path: str,
-# ):
-#     metr_imc_filename = PATH_CONF.raw["dataset"]["filenames"]["metr_imc"]
-#     sensor_ids_filename = PATH_CONF.raw["dataset"]["filenames"]["sensor_ids"]
-#     metadata_filename = PATH_CONF.raw["dataset"]["filenames"]["metadata"]
-#     sensor_locations_filename = PATH_CONF.raw["dataset"]["filenames"][
-#         "sensor_locations"
-#     ]
-#     distances_filename = PATH_CONF.raw["dataset"]["filenames"]["distances"]
-#     adjacency_matrix_filename = PATH_CONF.raw["dataset"]["filenames"][
-#         "adjacency_matrix"
-#     ]
-
-#     metr_imc_save_path = os.path.join(save_dir_path, metr_imc_filename)
-#     sensor_ids_save_path = os.path.join(save_dir_path, sensor_ids_filename)
-#     metadata_save_path = os.path.join(save_dir_path, metadata_filename)
-#     sensor_locations_save_path = os.path.join(save_dir_path, sensor_locations_filename)
-#     distances_save_path = os.path.join(save_dir_path, distances_filename)
-#     adj_mx_save_path = os.path.join(save_dir_path, adjacency_matrix_filename)
-
-#     traffic_data = TrafficData.import_from_hdf(PATH_CONF.metr_imc_path)
-#     wz_outlier_processor = RemovingWeirdZeroOutlierProcessor()
-#     traffic_data.data = wz_outlier_processor.process(traffic_data.data)
-#     traffic_data.select_sensors(target_nodelink)
-#     traffic_data.to_hdf(metr_imc_save_path)
-
-#     generate_dataset(
-#         traffic_data_path=metr_imc_save_path,
-#         ids_output_path=sensor_ids_save_path,
-#         metadata_output_path=metadata_save_path,
-#         sensor_locations_output_path=sensor_locations_save_path,
-#         distances_output_path=distances_save_path,
-#         adj_mx_output_path=adj_mx_save_path,
-#     )
-
-
-def generate_raw_dataset(api_key: Optional[str] = None):
+def generate_raw_dataset(raw_path_conf: PathConfig, api_key: Optional[str] = None):
     # Generating Core Files
-    generate_nodelink_raw()
-    generate_imcrts_raw(api_key=api_key)
-    generate_metr_imc_raw()
-    generate_dataset()
+    generate_nodelink_raw(
+        download_target_dir=raw_path_conf.nodelink_dir_path,
+        node_output_path=raw_path_conf.nodelink_node_path,
+        link_output_path=raw_path_conf.nodelink_link_path,
+        turn_output_path=raw_path_conf.nodelink_turn_path,
+    )
+    generate_imcrts_raw(api_key=api_key, imcrts_output_path=raw_path_conf.imcrts_path)
+    generate_metr_imc_raw(
+        road_data_path=raw_path_conf.nodelink_link_path,
+        traffic_data_path=raw_path_conf.imcrts_path,
+        metr_imc_path=raw_path_conf.metr_imc_path,
+        metr_imc_missing_path=raw_path_conf.metr_imc_missing_path,
+    )
+    generate_dataset(
+        traffic_data_path=raw_path_conf.metr_imc_path,
+        nodelink_link_path=raw_path_conf.nodelink_link_path,
+        nodelink_turn_path=raw_path_conf.nodelink_turn_path,
+        ids_output_path=raw_path_conf.sensor_ids_path,
+        metadata_output_path=raw_path_conf.metadata_path,
+        sensor_locations_output_path=raw_path_conf.sensor_locations_path,
+        distances_output_path=raw_path_conf.distances_path,
+        adj_mx_output_path=raw_path_conf.adj_mx_path,
+    )
 
     # Generating Misc
-    generate_metr_imc_shapefile()
-    generate_distances_shapefile()
+    # generate_metr_imc_shapefile(
+    #     metr_imc_path=raw_path_conf.metr_imc_path,
+    #     node_link_path=raw_path_conf.nodelink_link_path,
+    #     output_path=raw_path_conf.metr_shapefile_path,
+    # )
+    # generate_distances_shapefile(
+    #     distances_path=raw_path_conf.distances_path,
+    #     sensor_locations_path=raw_path_conf.sensor_locations_path,
+    #     output_path=raw_path_conf.distances_shapefile_path,
+    # )
 
     # Generating excel files
-    generate_metr_imc_excel()
+    # generate_metr_imc_excel(
+    #     metr_imc_path=raw_path_conf.metr_imc_path,
+    #     output_dir=raw_path_conf.misc_dir_path,
+    # )
 
 
 def generate_subset(
     subset_path_conf: PathConfig,
+    raw_path_conf: PathConfig,
     target_nodelinks_path: Optional[str] = None,
     target_data_start: Optional[str] = None,
     target_data_end: Optional[str] = None,
@@ -129,10 +118,10 @@ def generate_subset(
 
     # 2. Load full raw dataset
     logger.info("Loading raw METR-IMC data...")
-    traffic_data = TrafficData.import_from_hdf(PATH_CONF.metr_imc_path)
+    traffic_data = TrafficData.import_from_hdf(raw_path_conf.metr_imc_path)
     df = traffic_data.data
 
-    adj_mx_raw = AdjacencyMatrix.import_from_pickle(PATH_CONF.adj_mx_path)
+    adj_mx_raw = AdjacencyMatrix.import_from_pickle(raw_path_conf.adj_mx_path)
     adj_mx = adj_mx_raw.adj_mx
     G = nx.from_numpy_array(adj_mx)
     g_idx_to_sensor = {value: key for key, value in adj_mx_raw.sensor_id_to_idx.items()}
@@ -299,8 +288,8 @@ def generate_subset(
     logger.info("Generating dataset components...")
     generate_dataset(
         traffic_data_path=subset_path_conf.metr_imc_path,
-        nodelink_link_path=PATH_CONF.nodelink_link_path,  # Use raw path
-        nodelink_turn_path=PATH_CONF.nodelink_turn_path,  # Use raw path
+        nodelink_link_path=raw_path_conf.nodelink_link_path,  # Use raw path
+        nodelink_turn_path=raw_path_conf.nodelink_turn_path,  # Use raw path
         ids_output_path=subset_path_conf.sensor_ids_path,
         metadata_output_path=subset_path_conf.metadata_path,
         sensor_locations_output_path=subset_path_conf.sensor_locations_path,
@@ -312,7 +301,7 @@ def generate_subset(
     logger.info("Generating shapefiles...")
     generate_metr_imc_shapefile(
         metr_imc_path=subset_path_conf.metr_imc_path,
-        node_link_path=PATH_CONF.nodelink_link_path,
+        node_link_path=raw_path_conf.nodelink_link_path,
         output_path=subset_path_conf.metr_shapefile_path,
     )
 
@@ -354,8 +343,8 @@ def _apply_outlier_and_interpolation_inplace(
 
 
 def generate_metr_imc_excel(
-    metr_imc_path: str = PATH_CONF.metr_imc_path,
-    output_dir: str = PATH_CONF.misc_dir_path,
+    metr_imc_path: str,
+    output_dir: str,
     max_rows_per_file: int = 1000000,
 ):
     """
@@ -370,10 +359,6 @@ def generate_metr_imc_excel(
     logger.info("Loading METR-IMC data from HDF5...")
     traffic_data = TrafficData.import_from_hdf(metr_imc_path)
     df = traffic_data.data
-
-    # Configure output directory
-    if output_dir is None:
-        output_dir = os.path.dirname(metr_imc_path)
 
     total_rows = len(df)
     logger.info(f"Total rows: {total_rows}, Total sensors: {len(df.columns)}")
@@ -404,9 +389,9 @@ def generate_metr_imc_excel(
 
 
 def generate_distances_shapefile(
-    distances_path: str = PATH_CONF.distances_path,
-    sensor_locations_path: str = PATH_CONF.sensor_locations_path,
-    output_path: str = PATH_CONF.distances_shapefile_path,
+    distances_path: str,
+    sensor_locations_path: str,
+    output_path: str,
 ):
     distances = DistancesImc.import_from_csv(distances_path)
     sensor_locations = SensorLocations.import_from_csv(sensor_locations_path)
@@ -415,15 +400,15 @@ def generate_distances_shapefile(
 
 def generate_dataset(
     # Inputs
-    traffic_data_path: str = PATH_CONF.metr_imc_path,
-    nodelink_link_path: str = PATH_CONF.nodelink_link_path,
-    nodelink_turn_path: str = PATH_CONF.nodelink_turn_path,
+    traffic_data_path: str,
+    nodelink_link_path: str,
+    nodelink_turn_path: str,
     # Outputs
-    ids_output_path: str = PATH_CONF.sensor_ids_path,
-    metadata_output_path: str = PATH_CONF.metadata_path,
-    sensor_locations_output_path: str = PATH_CONF.sensor_locations_path,
-    distances_output_path: str = PATH_CONF.distances_path,
-    adj_mx_output_path: str = PATH_CONF.adj_mx_path,
+    ids_output_path: str,
+    metadata_output_path: str,
+    sensor_locations_output_path: str,
+    distances_output_path: str,
+    adj_mx_output_path: str,
 ):
     traffic_data = TrafficData.import_from_hdf(traffic_data_path)
 
@@ -458,12 +443,12 @@ def generate_dataset(
 
 
 def generate_nodelink_raw(
+    download_target_dir: str,
+    node_output_path: str,
+    link_output_path: str,
+    turn_output_path: str,
     nodelink_url: str = NODELINK_RAW_URL,
     region_codes: list[str] = TARGET_REGION_CODES,
-    download_target_dir: str = PATH_CONF.nodelink_dir_path,
-    node_output_path: str = PATH_CONF.nodelink_node_path,
-    link_output_path: str = PATH_CONF.nodelink_link_path,
-    turn_output_path: str = PATH_CONF.nodelink_turn_path,
 ):
     logger.info("Downloading Node-Link Data...")
     nodelink_raw_path = download_nodelink(download_target_dir, nodelink_url)
@@ -477,10 +462,10 @@ def generate_nodelink_raw(
 
 
 def generate_imcrts_raw(
+    imcrts_output_path: str,
     api_key: Optional[str] = None,
     start_date: str = IMCRTS_START_DATE,
     end_date: str = IMCRTS_END_DATE,
-    imcrts_output_path: str = PATH_CONF.imcrts_path,
 ):
     logger.info("Collecting IMCRTS Data...")
     resolved_api_key = api_key or os.environ.get("DATA_API_KEY")
@@ -501,11 +486,11 @@ def generate_imcrts_raw(
 
 def generate_metr_imc_raw(
     # Inputs
-    road_data_path: str = PATH_CONF.nodelink_link_path,
-    traffic_data_path: str = PATH_CONF.imcrts_path,
+    road_data_path: str,
+    traffic_data_path: str,
     # Outputs
-    metr_imc_path: str = PATH_CONF.metr_imc_path,
-    metr_imc_missing_path: str = PATH_CONF.metr_imc_missing_path,
+    metr_imc_path: str,
+    metr_imc_missing_path: str,
 ):
     road_data: gpd.GeoDataFrame = gpd.read_file(road_data_path)
     traffic_data = TrafficData.import_from_pickle(traffic_data_path)
@@ -521,9 +506,9 @@ def generate_metr_imc_raw(
 
 
 def generate_metr_imc_shapefile(
-    metr_imc_path: str = PATH_CONF.metr_imc_path,
-    node_link_path: str = PATH_CONF.nodelink_link_path,
-    output_path: str = PATH_CONF.metr_shapefile_path,
+    metr_imc_path: str,
+    node_link_path: str,
+    output_path: str,
 ):
     traffic_data = TrafficData.import_from_hdf(metr_imc_path)
     road_data: gpd.GeoDataFrame = gpd.read_file(node_link_path)
@@ -533,12 +518,12 @@ def generate_metr_imc_shapefile(
 
 
 def split_train_test_data(
-    raw_dataset_path: str = PATH_CONF.metr_imc_path,
-    raw_missing_path: str = PATH_CONF.metr_imc_missing_path,
-    training_dataset_path: str = PATH_CONF.metr_imc_training_path,
-    training_missing_path: str = PATH_CONF.metr_imc_training_missing_path,
-    test_dataset_path: str = PATH_CONF.metr_imc_test_path,
-    test_missing_path: str = PATH_CONF.metr_imc_test_missing_path,
+    raw_dataset_path: str,
+    raw_missing_path: str,
+    training_dataset_path: str,
+    training_missing_path: str,
+    test_dataset_path: str,
+    test_missing_path: str,
     training_end_date: str = TRAINING_END_DATE,
 ):
     traffic_data = TrafficData.import_from_hdf(raw_dataset_path)

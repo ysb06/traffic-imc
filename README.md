@@ -23,7 +23,6 @@ pip install -e ./traffic-imc-dataset -e ./traffic-imc-baseline
 1. Generate dataset:
 
 ```bash
-cd traffic-imc-dataset
 traffic-imc-dataset --api-key "YOUR_DATA_API_KEY"
 ```
 
@@ -34,9 +33,19 @@ export DATA_API_KEY="YOUR_DATA_API_KEY"
 traffic-imc-dataset
 ```
 
+`--config-dir` is optional and defaults to `./configs`. If you want to specify a different directory for configuration files, you can use the `--config-dir` flag:
+
+```bash
+traffic-imc-dataset --api-key "YOUR_DATA_API_KEY" --config-dir ./configs
+```
+
+Or download the pre-generated dataset:
+
+- Download link: [Google Drive (pre-generated METR-IMC dataset)](https://drive.google.com/drive/folders/1xgilXK2-ojll5PGKSm4-QfKtO335t04q?usp=sharing)
+- Place the downloaded `metr-imc` folder at `./datasets/metr-imc` in the project root.
+
 2. Run a baseline model:
 
 ```bash
-cd traffic-imc-baseline
-traffic-imc --model agcrn --config configs/agcrn.yaml
+traffic-imc --model agcrn --config traffic-imc-baseline/configs/agcrn.yaml
 ```

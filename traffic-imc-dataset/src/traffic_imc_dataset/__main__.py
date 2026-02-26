@@ -1,5 +1,6 @@
 import argparse
 import logging
+from pathlib import Path
 from typing import List, Tuple
 
 from .components.adj_mx import AdjacencyMatrix
@@ -28,17 +29,31 @@ def parse_args() -> argparse.Namespace:
         "--api-key",
         help="data.go.kr API key. If omitted, DATA_API_KEY environment variable is used.",
     )
+    parser.add_argument(
+        "--config-dir",
+        default="./configs",
+        help="Directory containing config.yaml and config_*.yaml files (default: ./configs).",
+    )
     return parser.parse_args()
 
 
-def generate_interpolated_subset(key: str, interpolator: Interpolator):
-    subset_path_conf = PathConfig.from_yaml(f"./configs/config_{key}.yaml")
+def _config_path(config_dir: str, filename: str) -> str:
+    return str(Path(config_dir) / filename)
+
+
+def generate_interpolated_subset(
+    key: str, interpolator: Interpolator, config_dir: str, raw_path_conf: PathConfig
+) -> None:
+    subset_path_conf = PathConfig.from_yaml(
+        _config_path(config_dir, f"config_{key}.yaml")
+    )
     interpolation_processors: List[Interpolator] = [
         interpolator,
     ]
 
     generate_subset(
         subset_path_conf=subset_path_conf,
+        raw_path_conf=raw_path_conf,
         cluster_count=1,
         missing_rate_threshold=0.9,
         interpolation_processors=interpolation_processors,
@@ -47,14 +62,17 @@ def generate_interpolated_subset(key: str, interpolator: Interpolator):
 
 def main() -> None:
     args = parse_args()
+    raw_path_conf = PathConfig.from_yaml(_config_path(args.config_dir, "config.yaml"))
+    raw_path_conf.create_directories()
+    base_subset_path_conf = PathConfig.from_yaml(
+        _config_path(args.config_dir, "config_base.yaml")
+    )
 
-    # Generate Raw Datasets
-    generate_raw_dataset(api_key=args.api_key)
-
-    # Generate base subset datasets (for testing)
-    base_subset_path_conf = PathConfig.from_yaml("./configs/config_base.yaml")
+    # Generate Raw and Base Datasets
+    generate_raw_dataset(raw_path_conf, api_key=args.api_key)
     generate_subset(
         subset_path_conf=base_subset_path_conf,
+        raw_path_conf=raw_path_conf,
         cluster_count=1,
         missing_rate_threshold=0.9,
     )
@@ -71,7 +89,7 @@ def main() -> None:
     ]
     for key, interpolator in interpolation_processors:
         logger.info(f'Generating interpolated subset with "{key}" interpolator.')
-        generate_interpolated_subset(key, interpolator)
+        generate_interpolated_subset(key, interpolator, args.config_dir, raw_path_conf)
 
 
 if __name__ == "__main__":
