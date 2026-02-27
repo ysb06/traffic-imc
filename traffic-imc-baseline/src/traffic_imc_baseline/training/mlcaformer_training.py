@@ -94,9 +94,9 @@ def _build_datamodule(
     path_config: PathConfig,
 ) -> MLCAFormerDataModule:
     return MLCAFormerDataModule(
-        training_dataset_path=path_config.metr_imc_training_path,
-        test_dataset_path=path_config.metr_imc_test_path,
-        test_missing_path=path_config.metr_imc_test_missing_path,
+        training_dataset_path=path_config.traffic_imc_training_path,
+        test_dataset_path=path_config.traffic_imc_test_path,
+        test_missing_path=path_config.traffic_imc_test_missing_path,
         train_val_split=cfg.datamodule.train_val_split,
         in_steps=cfg.datamodule.in_steps,
         out_steps=cfg.datamodule.out_steps,

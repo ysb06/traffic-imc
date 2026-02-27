@@ -1,4 +1,4 @@
-path_config_file: "../../traffic-imc-dataset/configs/config_mice.yaml"
+path_config_file: "./configs/dataset/config_mice.yaml"
 
 run:
   name_key: "mice"

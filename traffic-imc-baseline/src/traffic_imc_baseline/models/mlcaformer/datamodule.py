@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from traffic_imc_dataset.components import MissingMasks
-from traffic_imc_dataset.components.metr_imc.traffic_data import TrafficData
+from traffic_imc_dataset.components.traffic_imc.traffic_data import TrafficData
 
 from .dataset import MLCAFormerDataset
 

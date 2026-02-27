@@ -4,12 +4,12 @@ from pathlib import Path
 from typing import List, Tuple
 
 from .components.adj_mx import AdjacencyMatrix
-from .components.metr_imc.interpolation import Interpolator
-from .components.metr_imc.interpolation.bgcp import BGCPInterpolator
-from .components.metr_imc.interpolation.brits import BRITSInterpolator
-from .components.metr_imc.interpolation.knn import SpatialKNNInterpolator
-from .components.metr_imc.interpolation.mice import SpatialMICEInterpolator
-from .components.metr_imc.interpolation.trmf import TRMFInterpolator
+from .components.traffic_imc.interpolation import Interpolator
+from .components.traffic_imc.interpolation.bgcp import BGCPInterpolator
+from .components.traffic_imc.interpolation.brits import BRITSInterpolator
+from .components.traffic_imc.interpolation.knn import SpatialKNNInterpolator
+from .components.traffic_imc.interpolation.mice import SpatialMICEInterpolator
+from .components.traffic_imc.interpolation.trmf import TRMFInterpolator
 from .pipeline import generate_raw_dataset, generate_subset
 from .utils import PathConfig
 
@@ -31,8 +31,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--config-dir",
-        default="./configs",
-        help="Directory containing config.yaml and config_*.yaml files (default: ./configs).",
+        default="./configs/dataset",
+        help="Directory containing config.yaml and config_*.yaml files (default: ./configs/dataset).",
     )
     return parser.parse_args()
 

@@ -1,7 +1,7 @@
 # traffic-imc-dataset
 
 ## Overview
-This project collects and processes Incheon metropolitan traffic volume data to build the METR-IMC dataset.
+This project collects and processes Incheon metropolitan traffic volume data to build the Traffic-IMC dataset.
 
 Generated outputs:
 - 1 raw dataset
@@ -13,52 +13,66 @@ Generated outputs:
 - `data.go.kr` account
 - Approved usage request and API key for the Incheon traffic OpenAPI
 
-## Create Virtual Environment and Install
-Run from the project root:
+## Install (From Repository Root)
+Run from the root directory (`traffic-imc/`):
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install -e .
+pip install -e ./traffic-imc-dataset
 ```
 
 ## data.go.kr API Key Issuance
 1. Sign up and log in to `data.go.kr`.
-2. Search for the Incheon traffic statistics OpenAPI (https://www.data.go.kr/en/data/15113145/openapi.do).
+2. Search for the Incheon traffic statistics OpenAPI ([link](https://www.data.go.kr/en/data/15113145/openapi.do)).
 3. Submit a usage request for the target API.
 4. After approval, check your issued API key.
 5. The general key (Decoding) is recommended.
 
-## Run Dataset Generation
+## Config Directory
+Default config directory is `./configs/dataset`.
 
-Inject API key directly at runtime (Recommended)
+Required files:
+- `config.yaml`
+- `config_base.yaml`
+- `config_mice.yaml`
+- `config_knn.yaml`
+- `config_bgcp.yaml`
+- `config_trmf.yaml`
+- `config_brits.yaml`
+
+## Run Dataset Generation (From Repository Root)
+Inject API key directly at runtime:
 
 ```bash
-traffic-imc-dataset --api-key "YOUR_DATA_API_KEY" --config-dir ./configs
+traffic-imc-dataset --api-key "YOUR_DATA_API_KEY"
 ```
 
 ```bash
-python -m traffic_imc_dataset --api-key "YOUR_DATA_API_KEY" --config-dir ./configs
+python -m traffic_imc_dataset --api-key "YOUR_DATA_API_KEY"
 ```
 
-Or use environment variable
+Or use environment variable:
 
 ```bash
 export DATA_API_KEY="YOUR_DATA_API_KEY"
-traffic-imc-dataset --config-dir ./configs
+traffic-imc-dataset
 ```
 
 ```bash
 export DATA_API_KEY="YOUR_DATA_API_KEY"
-python -m traffic_imc_dataset --config-dir ./configs
+python -m traffic_imc_dataset
 ```
 
-`--config-dir` is optional and defaults to `./configs`.
+To override config directory:
+
+```bash
+traffic-imc-dataset --api-key "YOUR_DATA_API_KEY" --config-dir ./configs/dataset
+```
 
 ## Use Pre-generated Dataset
+If you want to skip API collection and preprocessing, download the pre-generated dataset:
 
-If you want to skip API collection and preprocessing, you can download the pre-generated dataset:
-
-- Download link: [Google Drive (pre-generated METR-IMC dataset)](https://drive.google.com/drive/folders/1xgilXK2-ojll5PGKSm4-QfKtO335t04q?usp=sharing)
-- Place the downloaded `metr-imc` folder at `./datasets/metr-imc` in the project root.
+- Download link: [Google Drive (pre-generated Traffic-IMC dataset)](https://drive.google.com/drive/folders/1xgilXK2-ojll5PGKSm4-QfKtO335t04q?usp=sharing)
+- Place the downloaded `traffic-imc` folder at `./datasets/traffic-imc` in the repository root.

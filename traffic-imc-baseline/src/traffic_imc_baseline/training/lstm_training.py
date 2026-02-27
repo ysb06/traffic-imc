@@ -82,9 +82,9 @@ def _load_training_config(path: Path) -> LSTMTrainingConfig:
 
 def _build_datamodule(cfg: LSTMTrainingConfig, path_config: PathConfig) -> LSTMDataModule:
     return LSTMDataModule(
-        training_dataset_path=path_config.metr_imc_training_path,
-        test_dataset_path=path_config.metr_imc_test_path,
-        test_missing_path=path_config.metr_imc_test_missing_path,
+        training_dataset_path=path_config.traffic_imc_training_path,
+        test_dataset_path=path_config.traffic_imc_test_path,
+        test_missing_path=path_config.traffic_imc_test_missing_path,
         train_val_split=cfg.datamodule.train_val_split,
         seq_length=cfg.datamodule.seq_length,
         batch_size=cfg.datamodule.batch_size,

@@ -1,16 +1,16 @@
 # Raw data paths configuration
-root_dir: "./datasets/metr-imc/subsets/mice_v1"
+root_dir: "./datasets/traffic-imc/subsets/base"
 
 # Core files
 dataset:
   dir: "."
   filenames:
-    metr_imc: "metr-imc.h5"
-    metr_imc_missing: "metr-imc-missing.h5"
-    metr_imc_training: "metr-imc-training.h5"
-    metr_imc_training_missing: "metr-imc-training-missing.h5"
-    metr_imc_test: "metr-imc-test.h5" 
-    metr_imc_test_missing: "metr-imc-test-missing.h5"
+    traffic_imc: "traffic-imc.h5"
+    traffic_imc_missing: "traffic-imc-missing.h5"
+    traffic_imc_training: "traffic-imc-training.h5"
+    traffic_imc_training_missing: "traffic-imc-training-missing.h5"
+    traffic_imc_test: "traffic-imc-test.h5" 
+    traffic_imc_test_missing: "traffic-imc-test-missing.h5"
     sensor_ids: "metr_ids.txt"
     metadata: "metadata.h5"
     sensor_locations: "graph_sensor_locations.csv"
@@ -36,6 +36,6 @@ misc:
   dir: "miscellaneous"
   filenames:
     imcrts_excel: "imcrts_data.xlsx"
-    metr_excel: "metr-imc.xlsx"
-    metr_shape: "metr_imc.shp"
+    traffic_excel: "traffic-imc.xlsx"
+    traffic_shape: "traffic_imc.shp"
     distances_shape: "distances_imc.shp"

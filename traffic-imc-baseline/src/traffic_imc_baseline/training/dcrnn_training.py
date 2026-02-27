@@ -91,9 +91,9 @@ def _build_datamodule(
     path_config: PathConfig,
 ) -> DCRNNSplitDataModule:
     return DCRNNSplitDataModule(
-        training_data_path=path_config.metr_imc_training_path,
-        test_data_path=path_config.metr_imc_test_path,
-        test_missing_path=path_config.metr_imc_test_missing_path,
+        training_data_path=path_config.traffic_imc_training_path,
+        test_data_path=path_config.traffic_imc_test_path,
+        test_missing_path=path_config.traffic_imc_test_missing_path,
         adj_mx_path=path_config.adj_mx_path,
         seq_len=cfg.datamodule.seq_len,
         horizon=cfg.datamodule.horizon,

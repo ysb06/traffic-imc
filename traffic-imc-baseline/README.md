@@ -2,7 +2,7 @@
 
 Unified training runner for Traffic-IMC baseline models.
 
-## Supported models
+## Supported Models
 - dcrnn
 - agcrn
 - stgcn
@@ -10,45 +10,38 @@ Unified training runner for Traffic-IMC baseline models.
 - mlcaformer
 
 ## Prerequisites
-1. Use Python `3.11+`.
-2. Ensure `traffic-imc-dataset` is available (editable install recommended).
-3. Configure Weights & Biases login before training:
+1. Python `3.11+`
+2. `traffic-imc-dataset` installed (editable install recommended)
+3. Dataset files prepared (either generated or downloaded)
+4. Weights & Biases login configured
 
 ```bash
 wandb login
 ```
 
-## Quick start
-From this project root:
+## Install (From Repository Root)
+Run from the root directory (`traffic-imc/`):
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ../traffic-imc-dataset -e .
-wandb login
-traffic-imc --model dcrnn --config configs/dcrnn.yaml
+pip install --upgrade pip
+pip install -e ./traffic-imc-dataset -e ./traffic-imc-baseline
 ```
 
-You can still run the module form if needed:
+## Quick Start (From Repository Root)
+```bash
+traffic-imc --model dcrnn --config ./configs/baseline/dcrnn.yaml
+```
+
+Module form:
 
 ```bash
-python -m traffic_imc_baseline --model dcrnn --config configs/dcrnn.yaml
-```
-
-## Configuration
-Each model keeps its own YAML schema under `configs/`.
-
-Common run section:
-
-```yaml
-run:
-  name_key: "mice"
-  code: 0
-  seed: null
+python -m traffic_imc_baseline --model dcrnn --config ./configs/baseline/dcrnn.yaml
 ```
 
 ## Outputs
 - Checkpoints and trainer outputs: `output/<model>/<name_key>_<code>/`
 - WandB local run artifacts: `wandb/`
 
-WandB logging is mandatory in this v1 runner.
+WandB logging is mandatory in this runner.

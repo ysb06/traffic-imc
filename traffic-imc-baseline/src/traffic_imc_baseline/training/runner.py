@@ -29,7 +29,7 @@ def run_training(
     if final_seed is not None:
         seed_everything(final_seed, workers=True)
 
-    path_config_file = resolve_path(config_file.parent, cfg.path_config_file)
+    path_config_file = resolve_path(Path.cwd(), cfg.path_config_file)
     path_config = PathConfig.from_yaml(path_config_file)
 
     data = adapter.build_datamodule(cfg, path_config)

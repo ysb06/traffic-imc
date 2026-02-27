@@ -101,9 +101,9 @@ def _build_datamodule(
     path_config: PathConfig,
 ) -> STGCNSplitDataModule:
     return STGCNSplitDataModule(
-        training_data_path=path_config.metr_imc_training_path,
-        test_data_path=path_config.metr_imc_test_path,
-        test_missing_path=path_config.metr_imc_test_missing_path,
+        training_data_path=path_config.traffic_imc_training_path,
+        test_data_path=path_config.traffic_imc_test_path,
+        test_missing_path=path_config.traffic_imc_test_missing_path,
         adj_mx_path=path_config.adj_mx_path,
         n_his=cfg.datamodule.n_his,
         n_pred=cfg.datamodule.n_pred,

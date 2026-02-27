@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Union
 import yaml
 
 
@@ -13,12 +13,12 @@ class PathConfig:
     root_dir_path: str
 
     # Core dataset file paths
-    metr_imc_path: str
-    metr_imc_missing_path: str
-    metr_imc_training_path: str
-    metr_imc_training_missing_path: str
-    metr_imc_test_path: str
-    metr_imc_test_missing_path: str
+    traffic_imc_path: str
+    traffic_imc_missing_path: str
+    traffic_imc_training_path: str
+    traffic_imc_training_missing_path: str
+    traffic_imc_test_path: str
+    traffic_imc_test_missing_path: str
     sensor_ids_path: str
     metadata_path: str
     sensor_locations_path: str
@@ -38,21 +38,16 @@ class PathConfig:
     # Miscellaneous paths
     misc_dir_path: str
     imcrts_excel_path: str
-    metr_excel_path: str
-    metr_shapefile_path: str
+    traffic_excel_path: str
+    traffic_shapefile_path: str
     distances_shapefile_path: str
 
     # Path Raws
     raw: Dict[str, Any]
 
     @classmethod
-    def from_yaml(cls, config_path: Optional[Union[str, Path]] = None) -> "PathConfig":
+    def from_yaml(cls, config_path: Union[str, Path]) -> "PathConfig":
         """Create PathConfig from YAML file"""
-        if config_path is None:
-            # Default config path relative to this file
-            current_dir = Path(__file__).parent
-            config_path = current_dir.parent.parent / "config.yaml"
-
         with open(config_path, "r", encoding="utf-8") as f:
             config: Dict[str, Any] = yaml.safe_load(f)
 
@@ -65,12 +60,12 @@ class PathConfig:
 
         # Core dataset file paths
         dataset_filenames = config["dataset"]["filenames"]
-        metr_imc_path = root_dir / dataset_filenames["metr_imc"]
-        metr_imc_missing_path = root_dir / dataset_filenames["metr_imc_missing"]
-        metr_imc_training_path = root_dir / dataset_filenames["metr_imc_training"]
-        metr_imc_training_missing_path = root_dir / dataset_filenames["metr_imc_training_missing"]
-        metr_imc_test_path = root_dir / dataset_filenames["metr_imc_test"]
-        metr_imc_test_missing_path = root_dir / dataset_filenames["metr_imc_test_missing"]
+        traffic_imc_path = root_dir / dataset_filenames["traffic_imc"]
+        traffic_imc_missing_path = root_dir / dataset_filenames["traffic_imc_missing"]
+        traffic_imc_training_path = root_dir / dataset_filenames["traffic_imc_training"]
+        traffic_imc_training_missing_path = root_dir / dataset_filenames["traffic_imc_training_missing"]
+        traffic_imc_test_path = root_dir / dataset_filenames["traffic_imc_test"]
+        traffic_imc_test_missing_path = root_dir / dataset_filenames["traffic_imc_test_missing"]
         sensor_ids_path = root_dir / dataset_filenames["sensor_ids"]
         metadata_path = root_dir / dataset_filenames["metadata"]
         sensor_locations_path = root_dir / dataset_filenames["sensor_locations"]
@@ -92,18 +87,18 @@ class PathConfig:
         misc_dir = root_dir / config["misc"]["dir"]
         misc_filenames = config["misc"]["filenames"]
         imcrts_excel_path = misc_dir / misc_filenames["imcrts_excel"]
-        metr_excel_path = misc_dir / misc_filenames["metr_excel"]
-        metr_shapefile_path = misc_dir / misc_filenames["metr_shape"]
+        traffic_excel_path = misc_dir / misc_filenames["traffic_excel"]
+        traffic_shapefile_path = misc_dir / misc_filenames["traffic_shape"]
         distances_shapefile_path = misc_dir / misc_filenames["distances_shape"]
 
         return cls(
             root_dir_path=str(root_dir),
-            metr_imc_path=str(metr_imc_path),
-            metr_imc_missing_path=str(metr_imc_missing_path),
-            metr_imc_training_path=str(metr_imc_training_path),
-            metr_imc_training_missing_path=str(metr_imc_training_missing_path),
-            metr_imc_test_path=str(metr_imc_test_path),
-            metr_imc_test_missing_path=str(metr_imc_test_missing_path),
+            traffic_imc_path=str(traffic_imc_path),
+            traffic_imc_missing_path=str(traffic_imc_missing_path),
+            traffic_imc_training_path=str(traffic_imc_training_path),
+            traffic_imc_training_missing_path=str(traffic_imc_training_missing_path),
+            traffic_imc_test_path=str(traffic_imc_test_path),
+            traffic_imc_test_missing_path=str(traffic_imc_test_missing_path),
             sensor_ids_path=str(sensor_ids_path),
             metadata_path=str(metadata_path),
             sensor_locations_path=str(sensor_locations_path),
@@ -117,8 +112,8 @@ class PathConfig:
             imcrts_path=str(imcrts_path),
             misc_dir_path=str(misc_dir),
             imcrts_excel_path=str(imcrts_excel_path),
-            metr_excel_path=str(metr_excel_path),
-            metr_shapefile_path=str(metr_shapefile_path),
+            traffic_excel_path=str(traffic_excel_path),
+            traffic_shapefile_path=str(traffic_shapefile_path),
             distances_shapefile_path=str(distances_shapefile_path),
             raw=config,
         )

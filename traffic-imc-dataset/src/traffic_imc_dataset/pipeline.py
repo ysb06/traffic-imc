@@ -15,9 +15,9 @@ from .components import (
     TrafficData,
     MissingMasks,
 )
-from .components.metr_imc.outlier import OutlierProcessor
-from .components.metr_imc.interpolation import Interpolator
-from .components.metr_imc.outlier.base import (
+from .components.traffic_imc.outlier import OutlierProcessor
+from .components.traffic_imc.interpolation import Interpolator
+from .components.traffic_imc.outlier.base import (
     SimpleAbsoluteOutlierProcessor,
     RemovingWeirdZeroOutlierProcessor,
 )
@@ -56,14 +56,14 @@ def generate_raw_dataset(raw_path_conf: PathConfig, api_key: Optional[str] = Non
         turn_output_path=raw_path_conf.nodelink_turn_path,
     )
     generate_imcrts_raw(api_key=api_key, imcrts_output_path=raw_path_conf.imcrts_path)
-    generate_metr_imc_raw(
+    generate_traffic_imc_raw(
         road_data_path=raw_path_conf.nodelink_link_path,
         traffic_data_path=raw_path_conf.imcrts_path,
-        metr_imc_path=raw_path_conf.metr_imc_path,
-        metr_imc_missing_path=raw_path_conf.metr_imc_missing_path,
+        traffic_imc_path=raw_path_conf.traffic_imc_path,
+        traffic_imc_missing_path=raw_path_conf.traffic_imc_missing_path,
     )
     generate_dataset(
-        traffic_data_path=raw_path_conf.metr_imc_path,
+        traffic_data_path=raw_path_conf.traffic_imc_path,
         nodelink_link_path=raw_path_conf.nodelink_link_path,
         nodelink_turn_path=raw_path_conf.nodelink_turn_path,
         ids_output_path=raw_path_conf.sensor_ids_path,
@@ -74,10 +74,10 @@ def generate_raw_dataset(raw_path_conf: PathConfig, api_key: Optional[str] = Non
     )
 
     # Generating Misc
-    # generate_metr_imc_shapefile(
-    #     metr_imc_path=raw_path_conf.metr_imc_path,
+    # generate_traffic_imc_shapefile(
+    #     traffic_imc_path=raw_path_conf.traffic_imc_path,
     #     node_link_path=raw_path_conf.nodelink_link_path,
-    #     output_path=raw_path_conf.metr_shapefile_path,
+    #     output_path=raw_path_conf.traffic_shapefile_path,
     # )
     # generate_distances_shapefile(
     #     distances_path=raw_path_conf.distances_path,
@@ -86,8 +86,8 @@ def generate_raw_dataset(raw_path_conf: PathConfig, api_key: Optional[str] = Non
     # )
 
     # Generating excel files
-    # generate_metr_imc_excel(
-    #     metr_imc_path=raw_path_conf.metr_imc_path,
+    # generate_traffic_imc_excel(
+    #     traffic_imc_path=raw_path_conf.traffic_imc_path,
     #     output_dir=raw_path_conf.misc_dir_path,
     # )
 
@@ -118,7 +118,7 @@ def generate_subset(
 
     # 2. Load full raw dataset
     logger.info("Loading raw METR-IMC data...")
-    traffic_data = TrafficData.import_from_hdf(raw_path_conf.metr_imc_path)
+    traffic_data = TrafficData.import_from_hdf(raw_path_conf.traffic_imc_path)
     df = traffic_data.data
 
     adj_mx_raw = AdjacencyMatrix.import_from_pickle(raw_path_conf.adj_mx_path)
@@ -268,26 +268,26 @@ def generate_subset(
     # 13. Save all processed datasets
     logger.info("Saving all processed datasets...")
     # 13.1 Full dataset (new_raw_data)
-    logger.info(f"Saving interpolated full data to {subset_path_conf.metr_imc_path}")
-    full_traffic_data.to_hdf(subset_path_conf.metr_imc_path)
-    missing_mask.to_hdf(subset_path_conf.metr_imc_missing_path)
+    logger.info(f"Saving interpolated full data to {subset_path_conf.traffic_imc_path}")
+    full_traffic_data.to_hdf(subset_path_conf.traffic_imc_path)
+    missing_mask.to_hdf(subset_path_conf.traffic_imc_missing_path)
 
     # 13.2 Training dataset
-    logger.info(f"Saving training data to {subset_path_conf.metr_imc_training_path}")
-    training_traffic_data.to_hdf(subset_path_conf.metr_imc_training_path)
+    logger.info(f"Saving training data to {subset_path_conf.traffic_imc_training_path}")
+    training_traffic_data.to_hdf(subset_path_conf.traffic_imc_training_path)
     MissingMasks(training_missing).to_hdf(
-        subset_path_conf.metr_imc_training_missing_path
+        subset_path_conf.traffic_imc_training_missing_path
     )
 
     # 13.3 Test dataset
-    logger.info(f"Saving test data to {subset_path_conf.metr_imc_test_path}")
-    test_traffic_data.to_hdf(subset_path_conf.metr_imc_test_path)
-    MissingMasks(test_missing).to_hdf(subset_path_conf.metr_imc_test_missing_path)
+    logger.info(f"Saving test data to {subset_path_conf.traffic_imc_test_path}")
+    test_traffic_data.to_hdf(subset_path_conf.traffic_imc_test_path)
+    MissingMasks(test_missing).to_hdf(subset_path_conf.traffic_imc_test_missing_path)
 
     # 14. Call generate_dataset() using subset PathConfig paths
     logger.info("Generating dataset components...")
     generate_dataset(
-        traffic_data_path=subset_path_conf.metr_imc_path,
+        traffic_data_path=subset_path_conf.traffic_imc_path,
         nodelink_link_path=raw_path_conf.nodelink_link_path,  # Use raw path
         nodelink_turn_path=raw_path_conf.nodelink_turn_path,  # Use raw path
         ids_output_path=subset_path_conf.sensor_ids_path,
@@ -299,10 +299,10 @@ def generate_subset(
 
     # 15. Generate shapefiles
     logger.info("Generating shapefiles...")
-    generate_metr_imc_shapefile(
-        metr_imc_path=subset_path_conf.metr_imc_path,
+    generate_traffic_imc_shapefile(
+        traffic_imc_path=subset_path_conf.traffic_imc_path,
         node_link_path=raw_path_conf.nodelink_link_path,
-        output_path=subset_path_conf.metr_shapefile_path,
+        output_path=subset_path_conf.traffic_shapefile_path,
     )
 
     generate_distances_shapefile(
@@ -342,22 +342,22 @@ def _apply_outlier_and_interpolation_inplace(
     traffic_data.data = df
 
 
-def generate_metr_imc_excel(
-    metr_imc_path: str,
+def generate_traffic_imc_excel(
+    traffic_imc_path: str,
     output_dir: str,
     max_rows_per_file: int = 1000000,
 ):
     """
-    Save `metr_imc.h5` data to Excel.
+    Save `traffic_imc.h5` data to Excel.
     If row count exceeds Excel limit (1,048,576), split into multiple files.
 
     Args:
-        metr_imc_path: HDF5 file path.
+        traffic_imc_path: HDF5 file path.
         output_dir: Output directory (if None, use HDF5 file directory).
         max_rows_per_file: Maximum rows per file (default: 1,000,000).
     """
     logger.info("Loading METR-IMC data from HDF5...")
-    traffic_data = TrafficData.import_from_hdf(metr_imc_path)
+    traffic_data = TrafficData.import_from_hdf(traffic_imc_path)
     df = traffic_data.data
 
     total_rows = len(df)
@@ -365,7 +365,7 @@ def generate_metr_imc_excel(
 
     # Save as a single file when under Excel row limit
     if total_rows <= max_rows_per_file:
-        output_path = os.path.join(output_dir, "metr-imc.xlsx")
+        output_path = os.path.join(output_dir, "traffic-imc.xlsx")
         logger.info(f"Saving to {output_path}...")
         df.to_excel(output_path, engine="openpyxl")
         logger.info("Excel file saved successfully")
@@ -379,7 +379,7 @@ def generate_metr_imc_excel(
             end_idx = min((i + 1) * max_rows_per_file, total_rows)
             df_chunk = df.iloc[start_idx:end_idx]
 
-            output_path = os.path.join(output_dir, f"metr-imc_part{i+1:02d}.xlsx")
+            output_path = os.path.join(output_dir, f"traffic-imc_part{i+1:02d}.xlsx")
             logger.info(
                 f"Saving part {i+1}/{num_files} ({end_idx - start_idx} rows) to {output_path}..."
             )
@@ -484,33 +484,33 @@ def generate_imcrts_raw(
     logger.info("Collecting Done")
 
 
-def generate_metr_imc_raw(
+def generate_traffic_imc_raw(
     # Inputs
     road_data_path: str,
     traffic_data_path: str,
     # Outputs
-    metr_imc_path: str,
-    metr_imc_missing_path: str,
+    traffic_imc_path: str,
+    traffic_imc_missing_path: str,
 ):
     road_data: gpd.GeoDataFrame = gpd.read_file(road_data_path)
     traffic_data = TrafficData.import_from_pickle(traffic_data_path)
 
     logger.info("Matching Link IDs...")
     traffic_data.select_sensors(road_data["LINK_ID"].tolist())
-    logger.info(f"Saving Traffic Data to {metr_imc_path}...")
-    traffic_data.to_hdf(metr_imc_path)
+    logger.info(f"Saving Traffic Data to {traffic_imc_path}...")
+    traffic_data.to_hdf(traffic_imc_path)
     missing_masks = MissingMasks.import_from_traffic_data(traffic_data)
-    logger.info(f"Saving Missing Masks to {metr_imc_missing_path}...")
-    missing_masks.to_hdf(metr_imc_missing_path)
+    logger.info(f"Saving Missing Masks to {traffic_imc_missing_path}...")
+    missing_masks.to_hdf(traffic_imc_missing_path)
     logger.info("Matching Done")
 
 
-def generate_metr_imc_shapefile(
-    metr_imc_path: str,
+def generate_traffic_imc_shapefile(
+    traffic_imc_path: str,
     node_link_path: str,
     output_path: str,
 ):
-    traffic_data = TrafficData.import_from_hdf(metr_imc_path)
+    traffic_data = TrafficData.import_from_hdf(traffic_imc_path)
     road_data: gpd.GeoDataFrame = gpd.read_file(node_link_path)
     traffic_link_ids = set(traffic_data.data.columns)
     filtered_roads = road_data[road_data["LINK_ID"].isin(traffic_link_ids)].copy()
