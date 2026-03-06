@@ -6,16 +6,16 @@ authors = [
     {name = "Seungbin Yim", email = "ysb06@hotmail.com"},
 ]
 dependencies = [
-    "lightning>=2.6.1",
-    "torch>=2.10.0",
-    "numpy>=2.4.2",
-    "pandas>=3.0.0",
-    "pyyaml>=6.0",
-    "scikit-learn>=1.8.0",
-    "scipy>=1.14.0",
-    "tqdm>=4.67.3",
-    "tables>=3.10.2",
-    "wandb>=0.25.0",
+    "lightning>=2.3.0",
+    "torch>=2.7.0",
+    "numpy>=1.26.0",
+    "pandas>=2.2.0",
+    "pyyaml>=6.0.0",
+    "scikit-learn>=1.4.0",
+    "scipy>=1.11.0",
+    "tqdm>=4.66.0",
+    "tables>=3.9.0",
+    "wandb>=0.17.0",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
@@ -23,6 +23,7 @@ license = {text = "MIT"}
 
 [project.scripts]
 traffic-imc = "traffic_imc_baseline.cli:main"
+traffic-imc-baseline = "traffic_imc_baseline.cli:main"
 
 [tool.pdm]
 distribution = false

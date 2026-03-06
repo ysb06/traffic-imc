@@ -19,17 +19,21 @@ Unified training runner for Traffic-IMC baseline models.
 wandb login
 ```
 
-## Install (From Repository Root)
-Run from the root directory (`traffic-imc/`):
+## Install
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install --upgrade pip
-pip install -e ./traffic-imc-dataset -e ./traffic-imc-baseline
+pip install -e ./traffic-imc-baseline
 ```
 
-## Quick Start (From Repository Root)
+## Quick Start
+```bash
+traffic-imc-baseline --model dcrnn --config ./configs/baseline/dcrnn.yaml
+```
+
+Backward-compatible command:
+
 ```bash
 traffic-imc --model dcrnn --config ./configs/baseline/dcrnn.yaml
 ```
