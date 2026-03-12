@@ -27,5 +27,5 @@ early_stopping:
   patience: 5
 
 trainer:
-  max_epochs: 20
+  max_epochs: 100
   gradient_clip_val: 1.0
