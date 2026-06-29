@@ -1,115 +1,100 @@
-from typing import Optional, Protocol, runtime_checkable
+from typing import Optional, Tuple
+
 import numpy as np
 import torch
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import Dataset
-from sklearn.preprocessing import MinMaxScaler
+
 
 class STGCNDatasetWithMissing(Dataset):
-    """PyTorch Dataset for STGCN model with missing mask support.
-    
-    Args:
-        data: Traffic data array of shape (time_steps, n_vertex)
-        n_his: Number of historical time steps
-        n_pred: Number of prediction time steps ahead
-        missing_mask: Optional boolean array of shape (time_steps, n_vertex)
-                     True indicates the value was originally missing (interpolated)
-        
-    Returns:
-        x: Input tensor of shape (in_channels, n_his, n_vertex)
-        y: Target tensor of shape (n_vertex,)
-        y_is_missing: Boolean tensor of shape (n_vertex,) - True if originally missing
+    """Lazy STGCN dataset with NaN-window filtering and missing-mask support.
+
+    Each sample returns:
+    - x: (1, n_his, n_vertex)
+    - y: (n_pred, n_vertex)
+    - y_is_missing: (n_pred, n_vertex)
     """
-    
+
     def __init__(
         self,
         data: np.ndarray,
         n_his: int,
         n_pred: int,
         missing_mask: Optional[np.ndarray] = None,
-    ):
+    ) -> None:
+        super().__init__()
+        if n_his <= 0:
+            raise ValueError("n_his must be a positive integer.")
+        if n_pred <= 0:
+            raise ValueError("n_pred must be a positive integer.")
+
         self.n_his = n_his
         self.n_pred = n_pred
-        self.missing_mask = missing_mask
-        
-        self.x, self.y, self.y_missing = self._data_transform(data, n_his, n_pred, missing_mask)
-        self._is_scaled = False
-        
-        assert len(self.x) == len(self.y), "x and y must have the same length"
-        if len(self.x) == 0:
-            raise ValueError("All samples contained NaNs and were filtered out. Check your data.")
-    
-    def apply_scaler(self, scaler: MinMaxScaler) -> None:
-        """Apply scaling to the dataset using a fitted scaler."""
-        if self._is_scaled:
-            return
-        
-        if len(self.x) == 0:
-            self._is_scaled = True
-            return
-        
-        # Scale x: shape (num_samples, in_channels, n_his, n_vertex)
-        x_shape = self.x.shape
-        x_flat = self.x.numpy().reshape(-1, 1)
-        x_scaled = scaler.transform(x_flat)
-        self.x = torch.tensor(x_scaled.reshape(x_shape), dtype=torch.float32)
-        
-        # Scale y: shape (num_samples, n_vertex)
-        y_shape = self.y.shape
-        y_flat = self.y.numpy().reshape(-1, 1)
-        y_scaled = scaler.transform(y_flat)
-        self.y = torch.tensor(y_scaled.reshape(y_shape), dtype=torch.float32)
-        
-        self._is_scaled = True
-    
+        self.data_values = np.ascontiguousarray(data, dtype=np.float32)
+        if self.data_values.ndim != 2:
+            raise ValueError(
+                "STGCN data must be a 2D array of shape "
+                "(time_steps, n_vertex)."
+            )
+        self.scaled_data = self.data_values.copy()
+        self.n_vertex = self.data_values.shape[1]
+
+        if missing_mask is None:
+            self.missing_mask = None
+        else:
+            mask_values = np.array(missing_mask, dtype=bool, copy=True)
+            if mask_values.shape != self.data_values.shape:
+                raise ValueError(
+                    "missing_mask shape must match data shape: "
+                    f"{mask_values.shape} != {self.data_values.shape}"
+                )
+            self.missing_mask = np.ascontiguousarray(mask_values)
+
+        self.valid_indices = self._compute_valid_indices()
+        if len(self.valid_indices) == 0:
+            raise ValueError(
+                "All samples contained NaNs and were filtered out. "
+                "Check your data."
+            )
+
+    def _compute_valid_indices(self) -> np.ndarray:
+        total_window = self.n_his + self.n_pred
+        num_possible = len(self.data_values) - total_window + 1
+        if num_possible <= 0:
+            return np.array([], dtype=np.int64)
+
+        row_has_nan = np.isnan(self.data_values).any(axis=1).astype(np.int64)
+        row_nan_cumsum = np.concatenate(
+            [np.array([0], dtype=np.int64), np.cumsum(row_has_nan)]
+        )
+
+        starts = np.arange(num_possible, dtype=np.int64)
+        ends = starts + total_window
+        window_nan_counts = row_nan_cumsum[ends] - row_nan_cumsum[starts]
+        return starts[window_nan_counts == 0]
+
+    def apply_scaler(self, scaler: StandardScaler) -> None:
+        flat_data = self.data_values.reshape(-1, 1)
+        scaled_flat = scaler.transform(flat_data)
+        self.scaled_data = np.ascontiguousarray(
+            scaled_flat.reshape(self.data_values.shape),
+            dtype=np.float32,
+        )
+
     def __len__(self) -> int:
-        return len(self.x)
-    
-    def __getitem__(self, idx: int):
-        return self.x[idx], self.y[idx], self.y_missing[idx]
-    
-    def _data_transform(
-        self,
-        data: np.ndarray,
-        n_his: int,
-        n_pred: int,
-        missing_mask: Optional[np.ndarray],
-    ):
-        n_vertex = data.shape[1]
-        l = len(data)
-        num = l - n_his - n_pred + 1
+        return len(self.valid_indices)
 
-        x_list, y_list, y_missing_list = [], [], []
-        filtered_count = 0
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        t = int(self.valid_indices[idx])
+        y_start = t + self.n_his
+        y_end = y_start + self.n_pred
 
-        for i in range(num):
-            head = i
-            tail = i + n_his
-            
-            x_window = data[head:tail, :]  # (n_his, n_vertex)
-            y_window = data[tail + n_pred - 1]  # (n_vertex,)
+        x = torch.from_numpy(self.scaled_data[t:y_start, :]).unsqueeze(0)
+        y = torch.from_numpy(self.scaled_data[y_start:y_end, :])
 
-            # 결측치 존재 여부 확인
-            if np.isnan(x_window).any() or np.isnan(y_window).any():
-                filtered_count += 1
-                continue
-
-            x_list.append(torch.tensor(x_window).unsqueeze(0))  # (1, n_his, n_vertex)
-            y_list.append(torch.tensor(y_window))
-            
-            # Missing mask 처리
-            if missing_mask is not None:
-                y_missing = missing_mask[tail + n_pred - 1]  # (n_vertex,)
-                y_missing_list.append(torch.tensor(y_missing, dtype=torch.bool))
-            else:
-                # missing_mask가 없으면 모두 False (missing 없음)
-                y_missing_list.append(torch.zeros(n_vertex, dtype=torch.bool))
-
-        x = torch.stack(x_list) if x_list else torch.empty(0)
-        y = torch.stack(y_list) if y_list else torch.empty(0)
-        y_missing = torch.stack(y_missing_list) if y_missing_list else torch.empty(0, dtype=torch.bool)
-        
-        if num > 0:
-            retention_rate = len(x_list) / num * 100
-            print(f"Dataset filtering: {len(x_list)}/{num} samples retained ({retention_rate:.1f}%), {filtered_count} filtered due to NaNs")
+        if self.missing_mask is None:
+            y_missing = torch.zeros((self.n_pred, self.n_vertex), dtype=torch.bool)
+        else:
+            y_missing = torch.from_numpy(self.missing_mask[y_start:y_end, :])
 
         return x, y, y_missing

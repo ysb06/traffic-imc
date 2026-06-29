@@ -2,10 +2,11 @@ from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import Dataset
 
-TrafficMultiSensorDataType = Tuple[np.ndarray, np.ndarray, bool]
+TrafficMultiSensorDataType = Tuple[np.ndarray, np.ndarray, np.ndarray]
+TrafficMultiSensorTestDataType = Tuple[np.ndarray, np.ndarray, np.ndarray, int]
 
 
 class TrafficMultiSensorDataset(Dataset):
@@ -13,26 +14,32 @@ class TrafficMultiSensorDataset(Dataset):
 
     Each sample returns exactly: x, y, y_is_missing.
     - x: (seq_length, 1)
-    - y: (1,)
-    - y_is_missing: bool
+    - y: (pred_length,)
+    - y_is_missing: (pred_length,)
     """
 
     def __init__(
         self,
         data: pd.DataFrame,
         seq_length: int = 24,
+        pred_length: int = 24,
         allow_nan: bool = False,
         missing_mask: Optional[pd.DataFrame] = None,
+        include_sensor_idx: bool = False,
     ):
         super().__init__()
-        if len(data) <= seq_length:
-            raise ValueError("Data length should be larger than seq_length")
+        if len(data) < seq_length + pred_length:
+            raise ValueError(
+                "Data length should be at least seq_length + pred_length"
+            )
 
         self.data_df = data
         self.seq_length = seq_length
+        self.pred_length = pred_length
         self.allow_nan = allow_nan
         self.sensor_names = list(data.columns)
         self.missing_mask = missing_mask
+        self.include_sensor_idx = include_sensor_idx
 
         self._raw_data: dict[str, np.ndarray] = {
             sensor_name: data[sensor_name].to_numpy().reshape(-1, 1)
@@ -54,7 +61,11 @@ class TrafficMultiSensorDataset(Dataset):
 
     def _valid_cursors(self, values: np.ndarray) -> list[int]:
         time_len = len(values)
-        all_i = np.arange(time_len - self.seq_length)
+        num_possible = time_len - self.seq_length - self.pred_length + 1
+        if num_possible <= 0:
+            return []
+
+        all_i = np.arange(num_possible)
         if self.allow_nan:
             return all_i.tolist()
 
@@ -63,28 +74,43 @@ class TrafficMultiSensorDataset(Dataset):
         cumsum = np.insert(cumsum, 0, 0)
 
         x_nan_count = cumsum[all_i + self.seq_length] - cumsum[all_i]
-        y_is_nan = isnan_arr[all_i + self.seq_length]
-        valid_mask = (x_nan_count == 0) & (~y_is_nan)
+        target_start = all_i + self.seq_length
+        target_end = target_start + self.pred_length
+        y_nan_count = cumsum[target_end] - cumsum[target_start]
+        valid_mask = (x_nan_count == 0) & (y_nan_count == 0)
 
         return all_i[valid_mask].tolist()
 
     def __len__(self) -> int:
         return len(self.index_mapping)
 
-    def __getitem__(self, index: int) -> TrafficMultiSensorDataType:
+    def __getitem__(
+        self,
+        index: int,
+    ) -> TrafficMultiSensorDataType | TrafficMultiSensorTestDataType:
         sensor_name, cursor = self.index_mapping[index]
         sensor_data = self._scaled_data[sensor_name]
 
         x = sensor_data[cursor : cursor + self.seq_length]
-        y = sensor_data[cursor + self.seq_length]
+        y = sensor_data[
+            cursor + self.seq_length : cursor + self.seq_length + self.pred_length
+        ].reshape(-1)
 
-        y_is_missing = False
+        y_is_missing = np.zeros(self.pred_length, dtype=bool)
         if self.missing_mask is not None:
-            y_time_index = self.data_df.index[cursor + self.seq_length]
-            y_is_missing = bool(self.missing_mask.loc[y_time_index, sensor_name])
+            target_index = self.data_df.index[
+                cursor + self.seq_length : cursor + self.seq_length + self.pred_length
+            ]
+            y_is_missing = self.missing_mask.loc[
+                target_index,
+                sensor_name,
+            ].to_numpy(dtype=bool)
+
+        if self.include_sensor_idx:
+            return x, y, y_is_missing, self.sensor_names.index(sensor_name)
 
         return x, y, y_is_missing
 
-    def apply_scaler(self, scaler: MinMaxScaler):
+    def apply_scaler(self, scaler: StandardScaler):
         for sensor_name, raw_values in self._raw_data.items():
             self._scaled_data[sensor_name] = scaler.transform(raw_values)

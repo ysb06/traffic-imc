@@ -5,8 +5,10 @@ import lightning as L
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
+
+from traffic_imc_baseline.training.runtime import should_pin_memory
 
 from traffic_imc_dataset.components import MissingMasks
 from traffic_imc_dataset.components.adj_mx import AdjacencyMatrix
@@ -43,10 +45,10 @@ class STGCNSplitDataModule(L.LightningDataModule):
         test_missing_path: str,
         adj_mx_path: str,
         n_his: int = 24,
-        n_pred: int = 1,
+        n_pred: int = 24,
         batch_size: int = 64,
         num_workers: int = 0,
-        shuffle_training: bool = True,
+        shuffle_training: bool = False,
         train_val_split: float = 0.8,
     ):
         super().__init__()
@@ -67,11 +69,16 @@ class STGCNSplitDataModule(L.LightningDataModule):
         self.validation_dataset: Optional[STGCNDatasetWithMissing] = None
         self.test_dataset: Optional[STGCNDatasetWithMissing] = None
 
-        self._scaler: Optional[MinMaxScaler] = None
+        self._scaler: Optional[StandardScaler] = None
 
     @property
-    def scaler(self) -> Optional[MinMaxScaler]:
+    def scaler(self) -> Optional[StandardScaler]:
         return self._scaler
+
+    def _ordered_sensor_ids(self) -> list:
+        if self.adj_mx_raw is None:
+            self.adj_mx_raw = AdjacencyMatrix.import_from_pickle(self.adj_mx_path)
+        return self.adj_mx_raw.sensor_ids
 
     def _prepare_scaler(self, train_data: np.ndarray) -> None:
         ref_data = train_data.reshape(-1, 1)
@@ -79,7 +86,7 @@ class STGCNSplitDataModule(L.LightningDataModule):
         if len(ref_data) == 0:
             raise ValueError("No valid data available to fit scaler.")
 
-        self._scaler = MinMaxScaler(feature_range=(0, 1))
+        self._scaler = StandardScaler()
         self._scaler.fit(ref_data)
 
     def _apply_scaling(self, *datasets: STGCNDatasetWithMissing) -> None:
@@ -115,49 +122,77 @@ class STGCNSplitDataModule(L.LightningDataModule):
         missing_mask_aligned = missing_mask_df.reindex(
             index=raw_df.index, columns=raw_df.columns, fill_value=False
         )
+        missing_mask_aligned = missing_mask_aligned.fillna(False).astype(bool)
         return raw_df, missing_mask_aligned.values
 
-    def setup(
-        self,
-        stage: Optional[Literal["fit", "validate", "test", "predict"]] = None,
-    ):
-        self.adj_mx_raw = AdjacencyMatrix.import_from_pickle(self.adj_mx_path)
-        ordered_sensor_ids = self.adj_mx_raw.sensor_ids
+    def _setup_fit(self, ordered_sensor_ids: list) -> None:
+        if (
+            self.training_dataset is not None
+            and self.validation_dataset is not None
+            and self._scaler is not None
+        ):
+            return
 
-        if stage in ["fit", "validate", None]:
-            train_df, val_df = self._load_training_data(ordered_sensor_ids)
-            training_data_array = train_df.values
-            validation_data_array = val_df.values
+        train_df, val_df = self._load_training_data(ordered_sensor_ids)
+        training_data_array = train_df.values
 
+        if self._scaler is None:
+            self._prepare_scaler(training_data_array)
+
+        datasets_to_scale = []
+        if self.training_dataset is None:
             self.training_dataset = STGCNDatasetWithMissing(
                 training_data_array,
                 self.n_his,
                 self.n_pred,
                 missing_mask=None,
             )
+            datasets_to_scale.append(self.training_dataset)
+
+        if self.validation_dataset is None:
             self.validation_dataset = STGCNDatasetWithMissing(
-                validation_data_array,
+                val_df.values,
                 self.n_his,
                 self.n_pred,
                 missing_mask=None,
             )
+            datasets_to_scale.append(self.validation_dataset)
 
-            self._prepare_scaler(training_data_array)
-            self._apply_scaling(self.training_dataset, self.validation_dataset)
+        if datasets_to_scale:
+            self._apply_scaling(*datasets_to_scale)
+
+    def _ensure_scaler(self, ordered_sensor_ids: list) -> None:
+        if self._scaler is not None:
+            return
+
+        train_df, _ = self._load_training_data(ordered_sensor_ids)
+        self._prepare_scaler(train_df.values)
+
+    def _setup_test(self, ordered_sensor_ids: list) -> None:
+        if self.test_dataset is not None:
+            return
+
+        self._ensure_scaler(ordered_sensor_ids)
+        test_df, test_missing_mask = self._load_test_data(ordered_sensor_ids)
+        self.test_dataset = STGCNDatasetWithMissing(
+            test_df.values,
+            self.n_his,
+            self.n_pred,
+            missing_mask=test_missing_mask,
+        )
+        self._apply_scaling(self.test_dataset)
+
+    def setup(
+        self,
+        stage: Optional[Literal["fit", "validate", "test", "predict"]] = None,
+    ):
+        ordered_sensor_ids = self._ordered_sensor_ids()
+
+        if stage in ["fit", "validate", None]:
+            self._setup_fit(ordered_sensor_ids)
 
         if stage in ["test", None]:
-            test_df, test_missing_mask = self._load_test_data(ordered_sensor_ids)
-            test_data_array = test_df.values
-
-            self.test_dataset = STGCNDatasetWithMissing(
-                test_data_array,
-                self.n_his,
-                self.n_pred,
-                missing_mask=test_missing_mask,
-            )
-
-            if self._scaler is not None:
-                self._apply_scaling(self.test_dataset)
+            self._setup_test(ordered_sensor_ids)
 
     def train_dataloader(self) -> DataLoader:
         if self.training_dataset is None:
@@ -169,6 +204,7 @@ class STGCNSplitDataModule(L.LightningDataModule):
             shuffle=self.shuffle_training,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
+            pin_memory=should_pin_memory(),
             collate_fn=collate_stgcn_train,
         )
 
@@ -182,6 +218,7 @@ class STGCNSplitDataModule(L.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
+            pin_memory=should_pin_memory(),
             collate_fn=collate_stgcn_train,
         )
 
@@ -195,5 +232,6 @@ class STGCNSplitDataModule(L.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
+            pin_memory=should_pin_memory(),
             collate_fn=collate_stgcn_test,
         )

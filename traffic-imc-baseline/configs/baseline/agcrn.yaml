@@ -1,0 +1,53 @@
+paths:
+  path_config_file: ../path_config.yaml
+
+model:
+  name: agcrn
+  params:
+    input_dim: 1
+    output_dim: 1
+    rnn_units: 64
+    num_layers: 2
+    embed_dim: 10
+    cheb_k: 2
+    learning_rate: 0.003
+    weight_decay: 0.0
+    adam_epsilon: 1.0e-8
+
+data:
+  params:
+    train_val_split: 0.8
+    in_steps: 24
+    out_steps: 24
+    batch_size: 64
+    num_workers: 2
+    shuffle_training: false
+    target_sensors: null
+
+run:
+  name: Baseline
+  code: 0
+  seed: null
+
+trainer:
+  max_epochs: 100
+  gradient_clip_val: 5.0
+  resume_ckpt_path: null
+
+runtime:
+  accelerator: null
+  devices: null
+  cpu_num_threads: null
+  cpu_num_interop_threads: null
+  float32_matmul_precision: null
+
+callbacks:
+  early_stopping:
+    enabled: true
+    patience: 10
+
+logging:
+  type: wandb
+  project: Traffic-IMC-CIKM
+  save_dir: ./logs
+  log_model: all

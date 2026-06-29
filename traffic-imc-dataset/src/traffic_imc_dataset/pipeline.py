@@ -18,8 +18,8 @@ from .components import (
 from .components.traffic_imc.outlier import OutlierProcessor
 from .components.traffic_imc.interpolation import Interpolator
 from .components.traffic_imc.outlier.base import (
-    SimpleAbsoluteOutlierProcessor,
     RemovingWeirdZeroOutlierProcessor,
+    TrafficCapacityAbsoluteOutlierProcessor,
 )
 from .imcrts.collector import IMCRTSCollector
 from .nodelink.converter import NodeLink
@@ -43,8 +43,8 @@ TARGET_REGION_CODES = [
     "169",
 ]  # All Incheon Regions
 IMCRTS_START_DATE = "20230126"
-IMCRTS_END_DATE = "20260115"
-TRAINING_END_DATE = "2025-11-30 23:59:59"
+IMCRTS_END_DATE = "20260425"
+TRAINING_END_DATE = "2026-01-25 23:59:59"
 
 
 def generate_raw_dataset(raw_path_conf: PathConfig, api_key: Optional[str] = None):
@@ -74,22 +74,22 @@ def generate_raw_dataset(raw_path_conf: PathConfig, api_key: Optional[str] = Non
     )
 
     # Generating Misc
-    # generate_traffic_imc_shapefile(
-    #     traffic_imc_path=raw_path_conf.traffic_imc_path,
-    #     node_link_path=raw_path_conf.nodelink_link_path,
-    #     output_path=raw_path_conf.traffic_shapefile_path,
-    # )
-    # generate_distances_shapefile(
-    #     distances_path=raw_path_conf.distances_path,
-    #     sensor_locations_path=raw_path_conf.sensor_locations_path,
-    #     output_path=raw_path_conf.distances_shapefile_path,
-    # )
+    generate_traffic_imc_shapefile(
+        traffic_imc_path=raw_path_conf.traffic_imc_path,
+        node_link_path=raw_path_conf.nodelink_link_path,
+        output_path=raw_path_conf.traffic_shapefile_path,
+    )
+    generate_distances_shapefile(
+        distances_path=raw_path_conf.distances_path,
+        sensor_locations_path=raw_path_conf.sensor_locations_path,
+        output_path=raw_path_conf.distances_shapefile_path,
+    )
 
     # Generating excel files
-    # generate_traffic_imc_excel(
-    #     traffic_imc_path=raw_path_conf.traffic_imc_path,
-    #     output_dir=raw_path_conf.misc_dir_path,
-    # )
+    generate_traffic_imc_excel(
+        traffic_imc_path=raw_path_conf.traffic_imc_path,
+        output_dir=raw_path_conf.misc_dir_path,
+    )
 
 
 def generate_subset(
@@ -103,15 +103,6 @@ def generate_subset(
     outlier_processors: Optional[List[OutlierProcessor]] = None,
     interpolation_processors: Optional[List[Interpolator]] = None,
 ):
-    """
-    Generate a subset dataset by spatial/temporal filtering from the raw dataset.
-
-    Args:
-        subset_path_conf: PathConfig defining subset dataset output paths.
-        target_nodelinks_path: Road shapefile path for spatial filtering (None = all roads).
-        target_data_start: Start date for temporal filtering (None = full range).
-        target_data_end: End date for temporal filtering (None = full range).
-    """
     # 1. Create directories
     subset_path_conf.create_directories()
     logger.info(f"Generating subset dataset at: {subset_path_conf.root_dir_path}")
@@ -127,45 +118,38 @@ def generate_subset(
     g_idx_to_sensor = {value: key for key, value in adj_mx_raw.sensor_id_to_idx.items()}
     logger.info(f"Original data: {len(df)} rows, {len(df.columns)} sensors")
 
-    # 4. Spatial filtering
-    # 4.1 Extract LINK_ID from shapefile, then select columns directly
+    # 3. Spatial filtering (Extract LINK_ID from shapefile, then select columns directly)
     if target_nodelinks_path:
         logger.info(f"Filtering sensors from shapefile: {target_nodelinks_path}")
         target_roads = gpd.read_file(target_nodelinks_path)
         target_link_ids = target_roads["LINK_ID"].tolist()
-        # Keep only intersecting columns (ignore nonexistent LINK_IDs)
         valid_link_ids = [lid for lid in target_link_ids if lid in df.columns]
         df = df[valid_link_ids]
         logger.info(f"After spatial filtering: {len(df.columns)} sensors")
 
-    # 4.2 Keep only nodes in the largest connected components in adjacency graph
+    # 4. Spatial filtering (Keep only nodes in the largest connected components in adjacency graph)
     if cluster_count is not None and cluster_count > 0:
-        # Get indices of sensors currently remaining in df
         sensor_to_g_idx = adj_mx_raw.sensor_id_to_idx
         current_sensor_ids = set(df.columns)
         current_node_indices = [
             sensor_to_g_idx[sid] for sid in current_sensor_ids if sid in sensor_to_g_idx
         ]
 
-        # Build subgraph from current sensors
         subgraph = G.subgraph(current_node_indices).copy()
         connected_components = list(nx.connected_components(subgraph))
 
-        # Sort by size (largest first)
         connected_components.sort(key=len, reverse=True)
         logger.info(
             f"Found {len(connected_components)} connected components, "
             f"sizes: {[len(c) for c in connected_components[:5]]}..."
         )
 
-        # Select top-N components by size
         selected_components = connected_components[:cluster_count]
         logger.info(
             f"Selected top {cluster_count} component(s) with sizes: "
             f"{[len(c) for c in selected_components]}"
         )
 
-        # Convert selected node indices back to sensor_id
         selected_node_indices = set()
         for component in selected_components:
             selected_node_indices.update(component)
@@ -176,7 +160,6 @@ def generate_subset(
             if idx in g_idx_to_sensor
         ]
 
-        # Filter DataFrame to selected sensors only
         valid_sensor_ids = [sid for sid in selected_sensor_ids if sid in df.columns]
         df = df[valid_sensor_ids]
         logger.info(
@@ -184,7 +167,7 @@ def generate_subset(
             f"from {len(selected_components)} component(s)"
         )
 
-    # 5. Temporal filtering (based on DatetimeIndex)
+    # 5. Temporal filtering
     if target_data_start:
         df = df.loc[target_data_start:]
 
@@ -196,7 +179,7 @@ def generate_subset(
         logger.info(f"After temporal filtering: {len(df)} rows")
 
     # 6. Base data correction
-    # 6.1 Missing-rate filtering (computed on current DataFrame)
+    # 6.1 Missing-rate filtering
     if missing_rate_threshold < 1.0:
         logger.info(
             f"Filtering sensors by missing rate threshold: {missing_rate_threshold * 100:.1f}%"
@@ -205,7 +188,6 @@ def generate_subset(
         sensor_missing_counts = missing_mask.sum()
         sensor_missing_rates = sensor_missing_counts / len(df)
 
-        # Keep sensors whose missing rate is below threshold
         filtered_sensors = sensor_missing_rates[
             sensor_missing_rates < missing_rate_threshold
         ].index.tolist()
@@ -214,77 +196,81 @@ def generate_subset(
             f"After missing rate filtering: {len(df.columns)} sensors (removed {len(sensor_missing_rates) - len(filtered_sensors)} sensors)"
         )
 
-    # 6.2 Default outlier processing and interpolation
-    logger.info("Processing default outliers...")
-    default_outlier_processors: List[OutlierProcessor] = [
-        SimpleAbsoluteOutlierProcessor(threshold=3450),
+    # 6.2 Prepare outlier processors.
+    logger.info("Preparing outlier processors...")
+    road_metadata = Metadata.import_from_nodelink(raw_path_conf.nodelink_link_path)
+    lane_counts = (
+        road_metadata.data[road_metadata.data["LINK_ID"].isin(df.columns)]
+        .set_index("LINK_ID")["LANES"]
+        .to_dict()
+    )
+    effective_outlier_processors: List[OutlierProcessor] = [
+        TrafficCapacityAbsoluteOutlierProcessor(lane_counts=lane_counts),
         RemovingWeirdZeroOutlierProcessor(),
     ]
-    for processor in default_outlier_processors:
-        df = processor.process(df)
+    if outlier_processors:
+        effective_outlier_processors.extend(outlier_processors)
 
-    # 6.3 Create base missing mask (before interpolation)
-    logger.info("Creating missing masks before interpolation...")
-    missing_mask = MissingMasks.import_from_traffic_data_frame(df)
-
-    # 7. Update filtered data
-    traffic_data.data = df
-
-    # 8. Split train/test by time (before interpolation)
-    logger.info("Splitting train/test data (before interpolation)...")
-    training_df = df.loc[:TRAINING_END_DATE].copy()
-    test_df_raw = df.loc[TRAINING_END_DATE:].copy()
+    # 7. Split train/test by time before split-local outlier processing and interpolation.
+    logger.info("Splitting train/test data...")
+    split_ts = pd.Timestamp(TRAINING_END_DATE)
+    training_df = df.loc[df.index <= split_ts].copy()
+    test_df_raw = df.loc[df.index > split_ts].copy()
     logger.info(
         f"Training data: {len(training_df)} rows, Test data: {len(test_df_raw)} rows"
     )
 
-    # 9. Split train/test missing masks (before interpolation)
-    training_missing = missing_mask.data.loc[training_df.index, training_df.columns]
-    test_missing = missing_mask.data.loc[test_df_raw.index, test_df_raw.columns]
-
-    # 10. Apply requested outlier/interpolation processing on training data
-    logger.info("Processing outliers and interpolation on training data only...")
-    training_traffic_data = TrafficData(training_df)
-    _apply_outlier_and_interpolation_inplace(
-        traffic_data=training_traffic_data,
-        outlier_processors=outlier_processors,
+    # 8. Apply outlier processing
+    training_traffic_data, training_missing = _process_split(
+        split_name="training",
+        df=training_df,
+        outlier_processors=effective_outlier_processors,
         interpolation_processors=interpolation_processors,
     )
 
-    # 11. Apply requested outlier/interpolation processing on full data
-    logger.info("Processing outliers and interpolation on full data...")
-    full_traffic_data = TrafficData(df.copy())
-    _apply_outlier_and_interpolation_inplace(
-        traffic_data=full_traffic_data,
-        outlier_processors=outlier_processors,
+    test_traffic_data, test_missing = _process_split(
+        split_name="test",
+        df=test_df_raw,
+        outlier_processors=effective_outlier_processors,
         interpolation_processors=interpolation_processors,
     )
 
-    # 12. Extract test split from interpolated full data
-    logger.info("Extracting test data from interpolated full data...")
-    test_df_interpolated = full_traffic_data.data.loc[TRAINING_END_DATE:].copy()
-    test_traffic_data = TrafficData(test_df_interpolated)
-    # TODO: Refactor so all outputs are saved only after all processing steps finish
-    # 13. Save all processed datasets
+    # 9. Reconstruct the full dataset and full invalid-value mask from independently processed splits.
+    logger.info("Combining independently processed train/test splits...")
+    full_df_interpolated = pd.concat(
+        [training_traffic_data.data, test_traffic_data.data],
+        axis=0,
+    ).sort_index()
+    full_traffic_data = TrafficData(full_df_interpolated)
+    full_missing = pd.concat(
+        [training_missing.data, test_missing.data],
+        axis=0,
+    ).sort_index()
+
+    assert training_missing.data.shape == training_traffic_data.data.shape
+    assert test_missing.data.shape == test_traffic_data.data.shape
+    assert full_missing.shape == full_traffic_data.data.shape
+    assert full_missing.index.equals(full_traffic_data.data.index)
+    assert list(full_missing.columns) == list(full_traffic_data.data.columns)
+
+    # 10. Save all processed datasets
     logger.info("Saving all processed datasets...")
-    # 13.1 Full dataset (new_raw_data)
+    # 10.1 Full dataset
     logger.info(f"Saving interpolated full data to {subset_path_conf.traffic_imc_path}")
     full_traffic_data.to_hdf(subset_path_conf.traffic_imc_path)
-    missing_mask.to_hdf(subset_path_conf.traffic_imc_missing_path)
+    MissingMasks(full_missing).to_hdf(subset_path_conf.traffic_imc_missing_path)
 
-    # 13.2 Training dataset
+    # 10.2 Training dataset
     logger.info(f"Saving training data to {subset_path_conf.traffic_imc_training_path}")
     training_traffic_data.to_hdf(subset_path_conf.traffic_imc_training_path)
-    MissingMasks(training_missing).to_hdf(
-        subset_path_conf.traffic_imc_training_missing_path
-    )
+    training_missing.to_hdf(subset_path_conf.traffic_imc_training_missing_path)
 
-    # 13.3 Test dataset
+    # 10.3 Test dataset
     logger.info(f"Saving test data to {subset_path_conf.traffic_imc_test_path}")
     test_traffic_data.to_hdf(subset_path_conf.traffic_imc_test_path)
-    MissingMasks(test_missing).to_hdf(subset_path_conf.traffic_imc_test_missing_path)
+    test_missing.to_hdf(subset_path_conf.traffic_imc_test_missing_path)
 
-    # 14. Call generate_dataset() using subset PathConfig paths
+    # 11. Call generate_dataset() using subset PathConfig paths
     logger.info("Generating dataset components...")
     generate_dataset(
         traffic_data_path=subset_path_conf.traffic_imc_path,
@@ -297,7 +283,7 @@ def generate_subset(
         adj_mx_output_path=subset_path_conf.adj_mx_path,
     )
 
-    # 15. Generate shapefiles
+    # 12. Generate shapefiles
     logger.info("Generating shapefiles...")
     generate_traffic_imc_shapefile(
         traffic_imc_path=subset_path_conf.traffic_imc_path,
@@ -319,14 +305,53 @@ def generate_subset(
 # ------------------------------------------------------------------------------ #
 
 
-def _apply_outlier_and_interpolation_inplace(
-    traffic_data: TrafficData,
+def _process_split(
+    split_name: str,
+    df: pd.DataFrame,
     outlier_processors: Optional[List[OutlierProcessor]],
     interpolation_processors: Optional[List[Interpolator]],
-):
-    """
-    Apply outlier processing and interpolation in-place to a TrafficData object.
-    """
+) -> tuple[TrafficData, MissingMasks]:
+    traffic_data = TrafficData(df.copy())
+    original_missing = traffic_data.data.isna()
+    original_missing_count = int(original_missing.sum().sum())
+
+    _apply_outliers_inplace(
+        traffic_data=traffic_data,
+        outlier_processors=outlier_processors,
+    )
+
+    invalid_after_outlier = traffic_data.data.isna()
+    invalid_after_outlier_count = int(invalid_after_outlier.sum().sum())
+    new_invalid_from_outlier_count = int(
+        (invalid_after_outlier & ~original_missing).sum().sum()
+    )
+
+    missing_mask = MissingMasks.import_from_traffic_data_frame(traffic_data.data)
+
+    _apply_interpolation_inplace(
+        traffic_data=traffic_data,
+        interpolation_processors=interpolation_processors,
+    )
+
+    remaining_nan_after_interpolation_count = int(traffic_data.data.isna().sum().sum())
+    logger.info(
+        "%s split missing mask stats: "
+        "original_missing=%d, invalid_after_outlier=%d, "
+        "new_invalid_from_outlier=%d, remaining_nan_after_interpolation=%d",
+        split_name,
+        original_missing_count,
+        invalid_after_outlier_count,
+        new_invalid_from_outlier_count,
+        remaining_nan_after_interpolation_count,
+    )
+
+    return traffic_data, missing_mask
+
+
+def _apply_outliers_inplace(
+    traffic_data: TrafficData,
+    outlier_processors: Optional[List[OutlierProcessor]],
+) -> None:
     df = traffic_data.data
 
     if outlier_processors:
@@ -334,12 +359,31 @@ def _apply_outlier_and_interpolation_inplace(
         for processor in outlier_processors:
             df = processor.process(df)
 
+    traffic_data.data = df
+
+
+def _apply_interpolation_inplace(
+    traffic_data: TrafficData,
+    interpolation_processors: Optional[List[Interpolator]],
+) -> None:
+    df = traffic_data.data
+
     if interpolation_processors:
         logger.info("Processing interpolation...")
         for processor in interpolation_processors:
             df = processor.interpolate(df)
+        df = _clip_negative_values(df)
 
     traffic_data.data = df
+
+
+def _clip_negative_values(df: pd.DataFrame) -> pd.DataFrame:
+    negative_count = int((df < 0).sum().sum())
+    if negative_count:
+        logger.info("Clipping %d negative traffic values to 0.", negative_count)
+        return df.mask(df < 0, 0)
+
+    return df
 
 
 def generate_traffic_imc_excel(
@@ -347,15 +391,6 @@ def generate_traffic_imc_excel(
     output_dir: str,
     max_rows_per_file: int = 1000000,
 ):
-    """
-    Save `traffic_imc.h5` data to Excel.
-    If row count exceeds Excel limit (1,048,576), split into multiple files.
-
-    Args:
-        traffic_imc_path: HDF5 file path.
-        output_dir: Output directory (if None, use HDF5 file directory).
-        max_rows_per_file: Maximum rows per file (default: 1,000,000).
-    """
     logger.info("Loading METR-IMC data from HDF5...")
     traffic_data = TrafficData.import_from_hdf(traffic_imc_path)
     df = traffic_data.data
@@ -363,14 +398,12 @@ def generate_traffic_imc_excel(
     total_rows = len(df)
     logger.info(f"Total rows: {total_rows}, Total sensors: {len(df.columns)}")
 
-    # Save as a single file when under Excel row limit
     if total_rows <= max_rows_per_file:
         output_path = os.path.join(output_dir, "traffic-imc.xlsx")
         logger.info(f"Saving to {output_path}...")
         df.to_excel(output_path, engine="openpyxl")
         logger.info("Excel file saved successfully")
     else:
-        # Split into multiple files
         num_files = (total_rows + max_rows_per_file - 1) // max_rows_per_file
         logger.info(f"Data exceeds Excel limit. Splitting into {num_files} files...")
 
@@ -418,7 +451,7 @@ def generate_dataset(
 
     # Metadata
     metadata = Metadata.import_from_nodelink(nodelink_link_path)
-    metadata.sensor_filter = metr_ids.data  # TODO: revisit this behavior
+    metadata.sensor_filter = metr_ids.data
     metadata.to_hdf(metadata_output_path)
 
     # Sensor Locations

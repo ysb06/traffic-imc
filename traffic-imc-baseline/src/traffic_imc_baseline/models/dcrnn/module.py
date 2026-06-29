@@ -9,7 +9,7 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import mean_absolute_error, mean_squared_error
 
-from ...utils import smape
+from ...utils import compute_test_metrics_by_horizon
 from .dcrnn_model import DCRNNModel
 
 
@@ -23,7 +23,7 @@ class DCRNNLightningModule(L.LightningModule):
         input_dim: int = 2,
         output_dim: int = 1,
         seq_len: int = 24,
-        horizon: int = 1,
+        horizon: int = 24,
         rnn_units: int = 64,
         num_rnn_layers: int = 2,
         max_diffusion_step: int = 2,
@@ -31,9 +31,11 @@ class DCRNNLightningModule(L.LightningModule):
         use_curriculum_learning: bool = True,
         cl_decay_steps: int = 2000,
         learning_rate: float = 0.01,
-        weight_decay: float = 0,
-        scheduler_milestones: Optional[list[int]] = None,
-        scheduler_gamma: float = 0.1,
+        weight_decay: float = 0.0,
+        adam_epsilon: float = 1.0e-3,
+        lr_decay_ratio: float = 0.1,
+        lr_decay_steps: tuple[int, ...] = (20, 30, 40, 50),
+        min_learning_rate: float = 2.0e-6,
         scaler=None,
     ):
         super().__init__()
@@ -58,11 +60,13 @@ class DCRNNLightningModule(L.LightningModule):
 
         self.model = DCRNNModel(adj_mx, self._logger, **model_kwargs)
 
-        self.criterion = nn.MSELoss()
+        self.criterion = nn.L1Loss()
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
-        self.scheduler_milestones = scheduler_milestones or [20, 30, 40, 50]
-        self.scheduler_gamma = scheduler_gamma
+        self.adam_epsilon = adam_epsilon
+        self.lr_decay_ratio = lr_decay_ratio
+        self.lr_decay_steps = lr_decay_steps
+        self.min_learning_rate = min_learning_rate
 
         self.batches_seen = 0
 
@@ -99,13 +103,15 @@ class DCRNNLightningModule(L.LightningModule):
             self.parameters(),
             lr=self.learning_rate,
             weight_decay=self.weight_decay,
-            eps=1e-8,
+            eps=self.adam_epsilon,
         )
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer,
-            milestones=self.scheduler_milestones,
-            gamma=self.scheduler_gamma,
-        )
+        min_lr_ratio = self.min_learning_rate / self.learning_rate
+
+        def lr_lambda(epoch: int) -> float:
+            decay_count = sum(epoch >= step for step in self.lr_decay_steps)
+            return max(min_lr_ratio, self.lr_decay_ratio**decay_count)
+
+        scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
 
         return {
             "optimizer": optimizer,
@@ -158,8 +164,8 @@ class DCRNNLightningModule(L.LightningModule):
 
         self.validation_outputs.append(
             {
-                "y_true": y.permute(1, 0, 2).cpu().numpy(),
-                "y_pred": y_hat.permute(1, 0, 2).cpu().numpy(),
+                "y_true": y.permute(1, 0, 2).detach().cpu().numpy(),
+                "y_pred": y_hat.permute(1, 0, 2).detach().cpu().numpy(),
                 "loss": loss.item(),
             }
         )
@@ -179,9 +185,9 @@ class DCRNNLightningModule(L.LightningModule):
 
         self.test_outputs.append(
             {
-                "y_true": y.permute(1, 0, 2).cpu().numpy(),
-                "y_pred": y_hat.permute(1, 0, 2).cpu().numpy(),
-                "y_is_missing": y_is_missing.permute(1, 0, 2).cpu().numpy(),
+                "y_true": y.permute(1, 0, 2).detach().cpu().numpy(),
+                "y_pred": y_hat.permute(1, 0, 2).detach().cpu().numpy(),
+                "y_is_missing": y_is_missing.permute(1, 0, 2).detach().cpu().numpy(),
                 "loss": loss.item(),
             }
         )
@@ -205,12 +211,8 @@ class DCRNNLightningModule(L.LightningModule):
 
         mae = mean_absolute_error(y_true_eval.flatten(), y_pred_eval.flatten())
         rmse = np.sqrt(mean_squared_error(y_true_eval.flatten(), y_pred_eval.flatten()))
-        smape_value = smape(y_true_eval.flatten(), y_pred_eval.flatten())
-
         self.log("val_mae", mae)
         self.log("val_rmse", rmse)
-        self.log("val_smape", float(smape_value))
-
         for horizon_idx, horizon_name in [(2, "3"), (5, "6"), (11, "12")]:
             if y_true_eval.shape[1] > horizon_idx:
                 y_true_h = y_true_eval[:, horizon_idx, :]
@@ -231,50 +233,48 @@ class DCRNNLightningModule(L.LightningModule):
             axis=0,
         )
 
-        y_true_flat = y_true.flatten()
-        y_pred_flat = y_pred.flatten()
-        y_is_missing_flat = y_is_missing.flatten()
-        non_missing_mask = ~y_is_missing_flat
-
-        total_points = len(y_true_flat)
-        non_missing_points = int(non_missing_mask.sum())
-        missing_points = total_points - non_missing_points
-
-        print("\nTest Data Statistics:")
-        print(f"  Total points: {total_points}")
-        print(
-            "  Non-missing (original) points: "
-            f"{non_missing_points} ({non_missing_points/total_points*100:.1f}%)"
-        )
-        print(
-            "  Missing (interpolated) points: "
-            f"{missing_points} ({missing_points/total_points*100:.1f}%)"
+        y_true_eval = self._inverse_transform(y_true)
+        y_pred_eval = self._inverse_transform(y_pred)
+        metrics = compute_test_metrics_by_horizon(
+            y_true_eval,
+            y_pred_eval,
+            missing_mask=y_is_missing,
         )
 
-        if non_missing_points == 0:
+        for name, value in metrics.items():
+            self.log(name, value)
+
+        if "test_mae" not in metrics:
             print("\nWarning: No non-missing test points available for metric calculation.")
             self.test_outputs.clear()
             return
 
-        y_true_eval = self._inverse_transform(y_true)
-        y_pred_eval = self._inverse_transform(y_pred)
-        y_true_eval_flat = y_true_eval.flatten()
-        y_pred_eval_flat = y_pred_eval.flatten()
-
-        y_true_valid = y_true_eval_flat[non_missing_mask]
-        y_pred_valid = y_pred_eval_flat[non_missing_mask]
-
-        mae = mean_absolute_error(y_true_valid, y_pred_valid)
-        rmse = np.sqrt(mean_squared_error(y_true_valid, y_pred_valid))
-        smape_value = smape(y_true_valid, y_pred_valid)
-
-        self.log("test_mae", mae)
-        self.log("test_rmse", rmse)
-        self.log("test_smape", float(smape_value))
+        valid_points = int(metrics["test_valid_points"])
+        missing_points = int(metrics["test_missing_points"])
+        total_points = valid_points + missing_points
+        print("\nTest Data Statistics:")
+        print(f"  Total points: {total_points}")
+        print(
+            "  Non-missing (original) points: "
+            f"{valid_points} ({valid_points / total_points * 100:.1f}%)"
+        )
+        print(
+            "  Missing (interpolated) points: "
+            f"{missing_points} ({missing_points / total_points * 100:.1f}%)"
+        )
 
         print("\nTest Results (Original Scale - Non-Missing Only):")
-        print(f"  MAE:   {mae:.4f}")
-        print(f"  RMSE:  {rmse:.4f}")
-        print(f"  sMAPE: {smape_value:.2f}%")
+        print(f"  MAE:   {metrics['test_mae']:.4f}")
+        print(f"  RMSE:  {metrics['test_rmse']:.4f}")
+        print("\nKey Horizon Test Results:")
+        for horizon in (1, 3, 6, 12, 24):
+            suffix = f"h{horizon:02d}"
+            mae_key = f"test_mae_{suffix}"
+            if mae_key not in metrics:
+                continue
+            print(
+                f"  {suffix}: MAE={metrics[mae_key]:.4f}, "
+                f"RMSE={metrics[f'test_rmse_{suffix}']:.4f}"
+            )
 
         self.test_outputs.clear()

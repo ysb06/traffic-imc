@@ -13,7 +13,7 @@ class MLCAFormer(nn.Module):
             self,
             num_nodes,
             in_steps=24,
-            out_steps=1,
+            out_steps=24,
             steps_per_day=24,
             input_dim=3,
             output_dim=1,

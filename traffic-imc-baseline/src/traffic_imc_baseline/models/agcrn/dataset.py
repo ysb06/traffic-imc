@@ -5,7 +5,7 @@ from typing import Optional, Tuple
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import Dataset
 
 
@@ -24,7 +24,7 @@ class AGCRNDataset(Dataset):
         self,
         data: pd.DataFrame,
         in_steps: int = 24,
-        out_steps: int = 1,
+        out_steps: int = 24,
         missing_mask: Optional[pd.DataFrame | np.ndarray] = None,
     ):
         self.in_steps = in_steps
@@ -100,7 +100,7 @@ class AGCRNDataset(Dataset):
             torch.from_numpy(y_missing).to(torch.bool),
         )
 
-    def apply_scaler(self, scaler: MinMaxScaler) -> None:
+    def apply_scaler(self, scaler: StandardScaler) -> None:
         flat_data = self.data_values.reshape(-1, 1)
         scaled_flat = scaler.transform(flat_data)
         self.scaled_data = scaled_flat.reshape(self.data_values.shape)

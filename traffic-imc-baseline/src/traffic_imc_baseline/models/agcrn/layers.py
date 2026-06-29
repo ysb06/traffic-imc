@@ -124,16 +124,14 @@ class AGCRNCell(nn.Module):
         # Concatenate input and state
         input_and_state = torch.cat((x, state), dim=-1)
         
-        # Compute reset and update gates
+        # Follow the original AGCRN gate convention.
         z_r = torch.sigmoid(self.gate(input_and_state, node_embeddings))
         z, r = torch.split(z_r, self.hidden_dim, dim=-1)
-        
-        # Compute candidate hidden state (r = reset gate)
-        candidate = torch.cat((x, r * state), dim=-1)
+
+        candidate = torch.cat((x, z * state), dim=-1)
         hc = torch.tanh(self.update(candidate, node_embeddings))
-        
-        # Compute new hidden state (z = update gate)
-        h = z * state + (1 - z) * hc
+
+        h = r * state + (1 - r) * hc
         
         return h
     

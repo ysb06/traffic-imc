@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 import time
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -36,10 +37,13 @@ class IMCRTSCollector:
         self,
         ignore_empty: bool = False,
         req_delay: float = 0.1,
+        max_retries: int = 3,
+        retry_initial_delay: float = 5.0,
+        retry_backoff: float = 2.0,
     ) -> None:
         total_size = (self.end_date - self.start_date).days + 1
 
-        data_list: List[List[Dict[str, Any]]] = []
+        data_list: List[Dict[str, Any]] = []
         current_date: datetime = self.start_date
 
         logger.info(
@@ -53,7 +57,12 @@ class IMCRTSCollector:
 
                 time.sleep(req_delay)
 
-                code, data = self.get_data(self.params)
+                code, data = self._get_data_with_retries(
+                    self.params,
+                    max_retries=max_retries,
+                    retry_initial_delay=retry_initial_delay,
+                    retry_backoff=retry_backoff,
+                )
                 if code == 200:
                     if data is not None:
                         data_list.extend(data)
@@ -66,7 +75,16 @@ class IMCRTSCollector:
                 else:
                     logger.error(f"Error Code: {code}")
                     logger.error(f"Failed to Get Data at [{current_date_string}]")
-                    break
+                    action = self._prompt_failed_request_action(
+                        current_date_string, code
+                    )
+                    if action == "retry":
+                        continue
+                    if action == "continue":
+                        break
+                    raise RuntimeError(
+                        f"Aborted IMCRTS collection at {current_date_string}"
+                    )
 
                 current_date += timedelta(days=1)
                 bar.update(1)
@@ -74,6 +92,63 @@ class IMCRTSCollector:
         df = pd.DataFrame(data_list)
         self.data = df
         logger.info(f"Data Collecting Finished: {self.data.shape}")
+
+    def _get_data_with_retries(
+        self,
+        params: Dict[str, Any],
+        max_retries: int,
+        retry_initial_delay: float,
+        retry_backoff: float,
+    ) -> Tuple[int, Optional[List[Dict[str, Any]]]]:
+        code, data = self.get_data(params)
+        if code == 200:
+            return code, data
+
+        delay = retry_initial_delay
+        for retry_count in range(1, max_retries + 1):
+            logger.warning(
+                f"Retrying request for {params['YMD']} "
+                f"({retry_count}/{max_retries}) after {delay:.1f}s..."
+            )
+            time.sleep(delay)
+            code, data = self.get_data(params)
+            if code == 200:
+                return code, data
+            delay *= retry_backoff
+
+        return code, data
+
+    def _prompt_failed_request_action(
+        self,
+        current_date_string: str,
+        code: int,
+    ) -> str:
+        if not sys.stdin.isatty():
+            raise RuntimeError(
+                "IMCRTS collection failed after retries "
+                f"at {current_date_string} with code {code}"
+            )
+
+        prompt = (
+            f"IMCRTS request failed at {current_date_string} after retries "
+            f"(code: {code}). [r]etry / [c]ontinue / [a]bort: "
+        )
+        while True:
+            try:
+                action = input(prompt).strip().lower()
+            except EOFError as exc:
+                raise RuntimeError(
+                    "Unable to read user input after IMCRTS collection failure"
+                ) from exc
+
+            if action in {"r", "retry"}:
+                return "retry"
+            if action in {"c", "continue"}:
+                return "continue"
+            if action in {"a", "abort"}:
+                return "abort"
+
+            logger.warning("Please enter 'r', 'c', or 'a'.")
 
     def to_pickle(self, output_path: str) -> None:
         logger.info("Creating Pickle...")
@@ -84,7 +159,7 @@ class IMCRTSCollector:
         self.data.to_excel(os.path.join(output_dir, file_name))
 
     def get_data(
-        self, params: Dict[str, Any]
+        self, params: Dict[str, Any], timeout: float = 30.0
     ) -> Tuple[int, Optional[List[Dict[str, Any]]]]:
         """Request Data from Data Server
         Sends a GET request to SERVICE_URL.
@@ -95,7 +170,12 @@ class IMCRTSCollector:
         Returns:
             Tuple[int, Optional[List[Dict[str, Any]]]]: Result of Data Request
         """
-        res = requests.get(url=SERVICE_URL, params=params)
+        try:
+            res = requests.get(url=SERVICE_URL, params=params, timeout=timeout)
+        except requests.RequestException as exc:
+            logger.error(f"Request failed: {exc}")
+            return (0, None)
+
         data: Optional[List[Dict[str, Any]]] = None
         if res.status_code == 200:
             try:
@@ -104,7 +184,7 @@ class IMCRTSCollector:
                 logger.error("JSON Decoding Failed")
                 if "SERVICE_KEY_IS_NOT_REGISTERED_ERROR" in res.text:
                     logger.error("You may use not valid service key")
-                return 0, []
+                return 0, None
 
             if raw["response"]["header"]["resultCode"] != "00":
                 logger.warning(

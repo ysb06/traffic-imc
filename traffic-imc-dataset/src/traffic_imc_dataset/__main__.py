@@ -31,8 +31,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--config-dir",
-        default="./configs/dataset",
-        help="Directory containing config.yaml and config_*.yaml files (default: ./configs/dataset).",
+        default="./configs",
+        help="Directory containing config.yaml and config_*.yaml files (default: ./configs).",
     )
     return parser.parse_args()
 
@@ -90,7 +90,6 @@ def main() -> None:
     for key, interpolator in interpolation_processors:
         logger.info(f'Generating interpolated subset with "{key}" interpolator.')
         generate_interpolated_subset(key, interpolator, args.config_dir, raw_path_conf)
-
 
 if __name__ == "__main__":
     main()

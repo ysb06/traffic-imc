@@ -1,0 +1,41 @@
+# Raw data paths configuration
+root_dir: "./datasets/traffic-imc/subsets/bgcp"
+
+# Core files
+dataset:
+  dir: "."
+  filenames:
+    traffic_imc: "traffic_imc.h5"
+    traffic_imc_missing: "traffic_imc_missing.h5"
+    traffic_imc_training: "traffic_imc_training.h5"
+    traffic_imc_training_missing: "traffic_imc_training_missing.h5"
+    traffic_imc_test: "traffic_imc_test.h5"
+    traffic_imc_test_missing: "traffic_imc_test_missing.h5"
+    sensor_ids: "sensor_ids.txt"
+    metadata: "metadata.h5"
+    sensor_locations: "sensor_locations.csv"
+    distances: "distances.csv"
+    adjacency_matrix: "adj_mx.pkl"
+
+# Nodelink data
+nodelink:
+  dir: "../../nodelink"
+  filenames:
+    node: "imc_node.shp"
+    link: "imc_link.shp"
+    turn: "imc_turninfo.dbf"
+
+# IMCRTS data
+imcrts:
+  dir: "imcrts"
+  filenames:
+    data: "imcrts_data.pkl"
+
+# Miscellaneous files
+misc:
+  dir: "miscellaneous"
+  filenames:
+    imcrts_excel: "imcrts_data.xlsx"
+    traffic_excel: "traffic-imc.xlsx"
+    traffic_shape: "traffic_imc.shp"
+    distances_shape: "distances_imc.shp"

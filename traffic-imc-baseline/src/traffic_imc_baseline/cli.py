@@ -1,21 +1,12 @@
 import argparse
 from typing import Optional, Sequence
 
-from .training.registry import get_adapter, list_models
-
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Traffic-IMC baseline training",
     )
 
-    parser.add_argument(
-        "--model",
-        type=str,
-        required=True,
-        choices=list_models(),
-        help="Model name to train",
-    )
     parser.add_argument(
         "--config",
         type=str,
@@ -28,6 +19,11 @@ def _build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Optional seed override",
     )
+    parser.add_argument(
+        "--test_only",
+        action="store_true",
+        help="Run only the test loop using trainer.resume_ckpt_path from the config",
+    )
 
     return parser
 
@@ -36,7 +32,14 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    from .training.runner import run_training
+    from .training.runner import run_only_test, run_training
 
-    adapter = get_adapter(args.model)
-    run_training(adapter=adapter, config_path=args.config, seed=args.seed)
+    if args.test_only:
+        run_only_test(config_path=args.config, seed=args.seed)
+        return
+
+    run_training(config_path=args.config, seed=args.seed)
+
+
+if __name__ == "__main__":
+    main()

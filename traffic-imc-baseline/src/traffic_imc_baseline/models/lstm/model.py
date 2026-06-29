@@ -12,7 +12,7 @@ class LSTMBaseModel(nn.Module):
         input_size: int = 1,
         hidden_size: int = 64,
         num_layers: int = 2,
-        output_size: int = 1,
+        output_size: int = 24,
         dropout_rate: float = 0.2,
     ):
         super(LSTMBaseModel, self).__init__()

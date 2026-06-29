@@ -46,17 +46,27 @@ class PathConfig:
     raw: Dict[str, Any]
 
     @classmethod
-    def from_yaml(cls, config_path: Union[str, Path]) -> "PathConfig":
+    def from_yaml(
+        cls,
+        config_path: Union[str, Path],
+        base_dir: Union[str, Path, None] = None,
+    ) -> "PathConfig":
         """Create PathConfig from YAML file"""
         with open(config_path, "r", encoding="utf-8") as f:
             config: Dict[str, Any] = yaml.safe_load(f)
 
-        return cls._build_from_config(config)
+        return cls._build_from_config(config, base_dir=base_dir)
 
     @classmethod
-    def _build_from_config(cls, config: Dict[str, Any]) -> "PathConfig":
+    def _build_from_config(
+        cls,
+        config: Dict[str, Any],
+        base_dir: Union[str, Path, None] = None,
+    ) -> "PathConfig":
         """Build PathConfig from configuration dictionary"""
         root_dir = Path(config["root_dir"])
+        if base_dir is not None and not root_dir.is_absolute():
+            root_dir = Path(base_dir) / root_dir
 
         # Core dataset file paths
         dataset_filenames = config["dataset"]["filenames"]

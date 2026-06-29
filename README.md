@@ -1,51 +1,34 @@
-# traffic-imc
+# Traffic-IMC
 
-## Overview
-Traffic-IMC is based on the paper *Traffic-IMC: A Benchmark for Robustness against Real-World Sensor Failures in Complex Urban Road Networks*.  
-The work focuses on interrupted traffic flow settings in urban networks and uses standard node-link topology as a key structural foundation.
+Traffic-IMC is an urban road-network traffic-volume forecasting benchmark for evaluating imputation-aware forecasting pipelines under operational missingness. The benchmark is based on hourly traffic-volume records from Incheon, South Korea and a directed, reachability-aware road graph derived from Korean Standard Node-Link data.
 
-## Subprojects
-- `traffic-imc-dataset`  
-  Dataset generation pipeline for METR-IMC raw data and interpolation-based subsets.
-- `traffic-imc-baseline`  
-  Baseline model training/evaluation pipeline driven by a unified command-line interface.
+This repository contains two subprojects:
 
-## Quick Start
-Run from the root project directory:
+- `traffic-imc-dataset`: dataset collection, quality control, graph construction, and imputed subset generation.
+- `traffic-imc-baseline`: unified training and evaluation runner for forecasting baselines.
+
+## Install and Run
+
+From the repository root:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ./traffic-imc-dataset -e ./traffic-imc-baseline
+pip install --upgrade pip
+pip install -e ./traffic-imc-dataset
+pip install -e ./traffic-imc-baseline
 ```
 
-## Run Workflow
-### Generate dataset
+Run each command from its respective subproject directory. For example, to generate the dataset:
 
 ```bash
+cd traffic-imc-dataset
 traffic-imc-dataset --api-key "YOUR_DATA_API_KEY"
 ```
 
-Or use environment variable:
+To run a baseline experiment:
 
 ```bash
-export DATA_API_KEY="YOUR_DATA_API_KEY"
-traffic-imc-dataset
-```
-
-`--config-dir` is optional and defaults to `./configs/dataset`. If you want to specify a different directory for configuration files, you can use the `--config-dir` flag:
-
-```bash
-traffic-imc-dataset --api-key "YOUR_DATA_API_KEY" --config-dir ./configs/dataset
-```
-
-Or download the pre-generated dataset:
-
-- Download link: [Google Drive (pre-generated METR-IMC dataset)](https://drive.google.com/drive/folders/1eZoIlw_3VDpf__qjzGToaFOlXt8kKMRS?usp=sharing)
-- Place the downloaded `traffic-imc` folder at `./datasets/traffic-imc` in the project root.
-
-### Run a baseline model
-
-```bash
-traffic-imc --model agcrn --config ./configs/baseline/agcrn.yaml
+cd traffic-imc-baseline
+traffic-imc-baseline --config ./configs/baseline/agcrn.yaml
 ```

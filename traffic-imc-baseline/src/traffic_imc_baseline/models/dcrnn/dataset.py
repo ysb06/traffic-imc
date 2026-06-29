@@ -21,7 +21,7 @@ class DCRNNDataset(Dataset):
         self,
         data: pd.DataFrame,
         seq_len: int = 24,
-        horizon: int = 1,
+        horizon: int = 24,
         add_time_in_day: bool = True,
         add_day_in_week: bool = False,
         missing_mask: Optional[np.ndarray] = None,

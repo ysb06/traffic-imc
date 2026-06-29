@@ -1,5 +1,5 @@
 import logging
-from typing import Dict
+from typing import Dict, Hashable, Union
 
 import numpy as np
 import pandas as pd
@@ -62,37 +62,25 @@ class SimpleAbsoluteOutlierProcessor(OutlierProcessor):
 class TrafficCapacityAbsoluteOutlierProcessor(OutlierProcessor):
     def __init__(
         self,
-        road_speed_limits: Dict[str, int],
-        lane_counts: Dict[str, int],
-        adjustment_rate: float = 1.0,  # Deprecated
+        lane_counts: Dict[Hashable, Union[int, float, str]],
+        base_capacity_per_lane: float = 2200.0,
+        safety_factor: float = 1.1,
     ) -> None:
         super().__init__()
-        self.road_speed_limits = road_speed_limits
-        self.lane_counts = lane_counts
+        self.lane_counts = dict(lane_counts)
+        self.base_capacity_per_lane = base_capacity_per_lane
+        self.safety_factor = safety_factor
 
     def _get_road_capacity(self, road_name: str) -> float:
-        speed_limit = self.road_speed_limits[road_name]
-        lane_count = self.lane_counts[road_name]
-        # alpha = 10 * (100 - speed_limit)
-        # if speed_limit > 100:
-        #     alpha /= 2
-        if speed_limit <= 80:
-            max_capacity = 3000
-        elif speed_limit <= 100:
-            max_capacity = 3300
-        else:
-            max_capacity = 3450
-        # Capacity values are restricted to handbook-level representative values.
-        # Detailed level-of-service effects are not modeled in this approximation.
-        # Signalized intersections are also assumed to be idealized.
-        # return (2200 - alpha) * lane_count * self.adjustment_rate
-        return max_capacity * lane_count
+        lane_count = float(self.lane_counts[road_name])
+        return self.base_capacity_per_lane * lane_count * self.safety_factor
 
     def _process_road_data(self, series: pd.Series) -> pd.Series:
         road_name = series.name
         capacity = self._get_road_capacity(road_name)
-        series_clean = series.mask(series > capacity)
-        self.successed_list.append(road_name)  # Record as successful
+        series_clean = series.mask(np.abs(series) > capacity)
+        self.successed_list.append(road_name)
+
         return series_clean
 
     def _process(self, df: pd.DataFrame) -> pd.DataFrame:

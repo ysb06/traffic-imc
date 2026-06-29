@@ -125,7 +125,7 @@ class ChebGraphConv(nn.Module):
         self.c_in = c_in
         self.c_out = c_out
         self.Ks = Ks
-        self.gso = gso
+        self.register_buffer("gso", gso.detach().clone().float())
         self.weight = nn.Parameter(torch.FloatTensor(Ks, c_in, c_out))
         if bias:
             self.bias = nn.Parameter(torch.FloatTensor(c_out))
@@ -176,7 +176,7 @@ class GraphConv(nn.Module):
         super(GraphConv, self).__init__()
         self.c_in = c_in
         self.c_out = c_out
-        self.gso = gso
+        self.register_buffer("gso", gso.detach().clone().float())
         self.weight = nn.Parameter(torch.FloatTensor(c_in, c_out))
         if bias:
             self.bias = nn.Parameter(torch.FloatTensor(c_out))
@@ -213,7 +213,6 @@ class GraphConvLayer(nn.Module):
         self.c_out = c_out
         self.align = Align(c_in, c_out)
         self.Ks = Ks
-        self.gso = gso
         if self.graph_conv_type == 'cheb_graph_conv':
             self.cheb_graph_conv = ChebGraphConv(c_out, c_out, Ks, gso, bias)
         elif self.graph_conv_type == 'graph_conv':

@@ -1,51 +1,61 @@
 # traffic-imc-baseline
 
-Unified training runner for Traffic-IMC baseline models.
+Unified training and evaluation runner for Traffic-IMC forecasting baselines.
 
 ## Supported Models
-- dcrnn
-- agcrn
-- stgcn
-- lstm
-- mlcaformer
+
+- `agcrn`
+- `bigst`
+- `dcrnn`
+- `gwnet`
+- `lstm`
+- `mlcaformer`
+- `mtgnn`
+- `stgcn`
+- `stid`
+
+The model is selected by the YAML file passed to `--config`; the CLI does not take a separate `--model` argument.
 
 ## Prerequisites
-1. Python `3.11+`
-2. `traffic-imc-dataset` installed (editable install recommended)
-3. Dataset files prepared (either generated or downloaded)
-4. Weights & Biases login configured
 
-```bash
-wandb login
-```
+1. Python `3.11+`
+2. Traffic-IMC dataset files prepared
+3. Weights & Biases login configured when using the default logger
 
 ## Install
+
+From this subproject directory:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ./traffic-imc-baseline
+pip install --upgrade pip
+pip install -e .
 ```
 
-## Quick Start
-```bash
-traffic-imc-baseline --model dcrnn --config ./configs/baseline/dcrnn.yaml
-```
-
-Backward-compatible command:
+If `traffic-imc-dataset` is checked out next to this subproject, install it before running training:
 
 ```bash
-traffic-imc --model dcrnn --config ./configs/baseline/dcrnn.yaml
+pip install -e ../traffic-imc-dataset
 ```
 
-Module form:
+## Train a Baseline
+
+Run DCRNN:
 
 ```bash
-python -m traffic_imc_baseline --model dcrnn --config ./configs/baseline/dcrnn.yaml
+traffic-imc-baseline --config ./configs/baseline/dcrnn.yaml
 ```
 
-## Outputs
-- Checkpoints and trainer outputs: `output/<model>/<name_key>_<code>/`
-- WandB local run artifacts: `wandb/`
+Run another model by changing the config path:
 
-WandB logging is mandatory in this runner.
+```bash
+traffic-imc-baseline --config ./configs/baseline/agcrn.yaml
+traffic-imc-baseline --config ./configs/baseline/bigst.yaml
+traffic-imc-baseline --config ./configs/baseline/gwnet.yaml
+traffic-imc-baseline --config ./configs/baseline/lstm.yaml
+traffic-imc-baseline --config ./configs/baseline/mlcaformer.yaml
+traffic-imc-baseline --config ./configs/baseline/mtgnn.yaml
+traffic-imc-baseline --config ./configs/baseline/stgcn.yaml
+traffic-imc-baseline --config ./configs/baseline/stid.yaml
+```

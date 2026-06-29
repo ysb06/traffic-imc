@@ -7,9 +7,10 @@ import lightning as L
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
-from tqdm import tqdm
+
+from traffic_imc_baseline.training.runtime import should_pin_memory
 
 from traffic_imc_dataset.components import MissingMasks
 from traffic_imc_dataset.components.traffic_imc.traffic_data import TrafficData
@@ -46,12 +47,11 @@ class MLCAFormerDataModule(L.LightningDataModule):
         test_missing_path: str,
         train_val_split: float = 0.8,
         in_steps: int = 24,
-        out_steps: int = 1,
+        out_steps: int = 24,
         steps_per_day: int = 24,
         batch_size: int = 64,
         num_workers: int = 0,
-        shuffle_training: bool = True,
-        scale_method: Optional[Literal["normal", "strict", "none"]] = "normal",
+        shuffle_training: bool = False,
         collate_fn: Callable[[list[MLCAFormerSample]], MLCAFormerTrainBatch] = collate_mlcaformer_train,
         test_collate_fn: Callable[[list[MLCAFormerSample]], MLCAFormerTestBatch] = collate_mlcaformer_test,
     ):
@@ -67,12 +67,11 @@ class MLCAFormerDataModule(L.LightningDataModule):
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.shuffle_training = shuffle_training
-        self.scale_method = scale_method
 
         self.collate_fn = collate_fn
         self.test_collate_fn = test_collate_fn
 
-        self._scaler: Optional[MinMaxScaler] = None
+        self._scaler: Optional[StandardScaler] = None
 
         self.train_dataset: Optional[MLCAFormerDataset] = None
         self.val_dataset: Optional[MLCAFormerDataset] = None
@@ -83,10 +82,7 @@ class MLCAFormerDataModule(L.LightningDataModule):
         self.sensor_ids: Optional[list[str]] = None
 
     @property
-    def scaler(self) -> Optional[MinMaxScaler]:
-        if self.scale_method in (None, "none"):
-            return None
-
+    def scaler(self) -> Optional[StandardScaler]:
         if self._scaler is None:
             train_df, _ = self._load_training_data()
             self._prepare_scaler(train_df)
@@ -117,42 +113,17 @@ class MLCAFormerDataModule(L.LightningDataModule):
         )
         return raw_df, missing_mask_aligned
 
-    def _get_strict_scaler_data(self, dataset: MLCAFormerDataset) -> np.ndarray:
-        values: list[np.ndarray] = []
-        for i in tqdm(range(len(dataset)), desc="Extracting strict scaler data"):
-            x, y, _ = dataset[i]
-            values.append(x[:, :, 0].numpy().reshape(-1))
-            values.append(y[:, :, 0].numpy().reshape(-1))
-        return np.concatenate(values).reshape(-1, 1)
-
     def _prepare_scaler(self, train_df: pd.DataFrame) -> None:
-        if self.scale_method in (None, "none"):
-            self._scaler = None
-            return
-
-        if self.scale_method == "strict":
-            temp_dataset = MLCAFormerDataset(
-                train_df,
-                in_steps=self.in_steps,
-                out_steps=self.out_steps,
-                steps_per_day=self.steps_per_day,
-                missing_mask=None,
-            )
-            ref_data = self._get_strict_scaler_data(temp_dataset)
-        else:
-            ref_data = train_df.values.reshape(-1, 1)
-            ref_data = ref_data[~np.isnan(ref_data).any(axis=1)]
+        ref_data = train_df.values.reshape(-1, 1)
+        ref_data = ref_data[~np.isnan(ref_data).any(axis=1)]
 
         if len(ref_data) == 0:
             raise ValueError("No valid data available to fit scaler.")
 
-        self._scaler = MinMaxScaler(feature_range=(0, 1))
+        self._scaler = StandardScaler()
         self._scaler.fit(ref_data)
 
     def _apply_scaling(self, *datasets: MLCAFormerDataset) -> None:
-        if self.scale_method in (None, "none"):
-            return
-
         if self._scaler is None:
             raise ValueError("Scaler is not fitted. Call _prepare_scaler first.")
 
@@ -205,6 +176,7 @@ class MLCAFormerDataModule(L.LightningDataModule):
             shuffle=self.shuffle_training,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
+            pin_memory=should_pin_memory(),
             collate_fn=self.collate_fn,
         )
 
@@ -218,6 +190,7 @@ class MLCAFormerDataModule(L.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
+            pin_memory=should_pin_memory(),
             collate_fn=self.collate_fn,
         )
 
@@ -231,5 +204,6 @@ class MLCAFormerDataModule(L.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
+            pin_memory=should_pin_memory(),
             collate_fn=self.test_collate_fn,
         )

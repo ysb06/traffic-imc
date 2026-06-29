@@ -21,22 +21,52 @@ class AdjacencyMatrix:
 
     @staticmethod
     def import_from_components(
-        id_list: IdList, distances_imc: DistancesImc, normalized_k=0.1
+        id_list: IdList,
+        distances_imc: DistancesImc,
+        normalized_k: float = 0.1,
+        top_k: Optional[int] = 10,
     ) -> "AdjacencyMatrix":
+        def apply_rowwise_top_k(
+            adj_mx: np.ndarray,
+            top_k: Optional[int],
+        ) -> np.ndarray:
+            if top_k is None:
+                return adj_mx
+
+            pruned = np.zeros_like(adj_mx)
+            diag_indices = np.diag_indices_from(adj_mx)
+            pruned[diag_indices] = adj_mx[diag_indices]
+            if top_k == 0:
+                return pruned
+
+            for row_idx, row in enumerate(adj_mx):
+                candidate_indices = np.flatnonzero(row > 0)
+                candidate_indices = candidate_indices[candidate_indices != row_idx]
+                if len(candidate_indices) == 0:
+                    continue
+
+                sorted_indices = candidate_indices[
+                    np.argsort(row[candidate_indices], kind="stable")[::-1]
+                ]
+                keep_indices = sorted_indices[:top_k]
+                pruned[row_idx, keep_indices] = row[keep_indices]
+
+            return pruned
+
         def get_adjacency_matrix(
             distance_df: pd.DataFrame,
             sensor_ids: List[str],
             normalized_k: float,
+            top_k: Optional[int],
         ):
             num_sensors = len(sensor_ids)
             dist_mx = np.zeros((num_sensors, num_sensors), dtype=np.float32)
             dist_mx[:] = np.inf
 
-            sensor_id_to_index: Dict[str, int] = {}  # Builds sensor id to index map.
+            sensor_id_to_index: Dict[str, int] = {}
             for i, sensor_id in enumerate(sensor_ids):
                 sensor_id_to_index[sensor_id] = i
 
-            # Fills cells in the matrix with distances.
             for row in tqdm(
                 distance_df.values, total=len(distance_df), desc="Filling Matrix"
             ):
@@ -44,21 +74,17 @@ class AdjacencyMatrix:
                     continue
                 dist_mx[sensor_id_to_index[row[0]], sensor_id_to_index[row[1]]] = row[2]
 
-            # Calculates the standard deviation as theta.
             distances = dist_mx[~np.isinf(dist_mx)].flatten()
             std = distances.std()
             adj_mx: np.ndarray = np.exp(-np.square(dist_mx / std))
-            # Make the adjacent matrix symmetric by taking the max.
-            # adj_mx = np.maximum.reduce([adj_mx, adj_mx.T])
-
-            # Sets entries that lower than a threshold, i.e., k, to zero for sparsity.
             adj_mx[adj_mx < normalized_k] = 0
+            adj_mx = apply_rowwise_top_k(adj_mx, top_k)
 
             return adj_mx, sensor_id_to_index
 
         sensor_ids = id_list.data
         adj_mx, sendsor_id_to_idx = get_adjacency_matrix(
-            distances_imc.data, sensor_ids, normalized_k
+            distances_imc.data, sensor_ids, normalized_k, top_k
         )
 
         return AdjacencyMatrix(sensor_ids, sendsor_id_to_idx, adj_mx)

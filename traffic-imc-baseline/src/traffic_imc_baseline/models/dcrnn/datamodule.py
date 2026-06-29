@@ -5,8 +5,10 @@ import lightning as L
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from torch.utils.data import DataLoader
+
+from traffic_imc_baseline.training.runtime import should_pin_memory
 
 from traffic_imc_dataset.components import MissingMasks
 from traffic_imc_dataset.components.adj_mx import AdjacencyMatrix
@@ -72,10 +74,10 @@ class DCRNNSplitDataModule(L.LightningDataModule):
         test_missing_path: str,
         adj_mx_path: str,
         seq_len: int = 24,
-        horizon: int = 1,
+        horizon: int = 24,
         batch_size: int = 64,
         num_workers: int = 0,
-        shuffle_training: bool = True,
+        shuffle_training: bool = False,
         train_val_split: float = 0.8,
         add_time_in_day: bool = True,
         add_day_in_week: bool = False,
@@ -97,14 +99,14 @@ class DCRNNSplitDataModule(L.LightningDataModule):
         self.add_day_in_week = add_day_in_week
 
         self.adj_mx_raw: Optional[AdjacencyMatrix] = None
-        self._scaler: Optional[MinMaxScaler] = None
+        self._scaler: Optional[StandardScaler] = None
 
         self.training_dataset: Optional[DCRNNDataset] = None
         self.validation_dataset: Optional[DCRNNDataset] = None
         self.test_dataset: Optional[DCRNNDataset] = None
 
     @property
-    def scaler(self) -> Optional[MinMaxScaler]:
+    def scaler(self) -> Optional[StandardScaler]:
         return self._scaler
 
     @property
@@ -135,8 +137,10 @@ class DCRNNSplitDataModule(L.LightningDataModule):
     def _prepare_scaler(self, train_data: np.ndarray) -> None:
         ref_data = train_data.reshape(-1, 1)
         ref_data = ref_data[~np.isnan(ref_data).any(axis=1)]
+        if len(ref_data) == 0:
+            raise ValueError("No valid data available to fit scaler.")
 
-        self._scaler = MinMaxScaler(feature_range=(0, 1))
+        self._scaler = StandardScaler()
         self._scaler.fit(ref_data)
 
     def _apply_scaling(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -236,6 +240,7 @@ class DCRNNSplitDataModule(L.LightningDataModule):
             shuffle=self.shuffle_training,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
+            pin_memory=should_pin_memory(),
             collate_fn=collate_dcrnn_train,
         )
 
@@ -251,6 +256,7 @@ class DCRNNSplitDataModule(L.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
+            pin_memory=should_pin_memory(),
             collate_fn=collate_dcrnn_train,
         )
 
@@ -264,5 +270,6 @@ class DCRNNSplitDataModule(L.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
+            pin_memory=should_pin_memory(),
             collate_fn=collate_dcrnn_test,
         )

@@ -189,6 +189,7 @@ class BaseSTGCN(STGCNChebGraphConv):
         gso: torch.Tensor,
         dropout_rate: float = 0.5,
         n_his: int = 24,
+        n_pred: int = 24,
         Kt: int = 3,
         stblock_num: int = 2,
         Ks: int = 3,
@@ -196,6 +197,9 @@ class BaseSTGCN(STGCNChebGraphConv):
         graph_conv_type: str = "graph_conv",
         enable_bias: bool = True,
     ):
+        if n_pred <= 0:
+            raise ValueError("n_pred must be a positive integer.")
+
         # Calculate Ko (output temporal dimension)
         Ko = n_his - (Kt - 1) * 2 * stblock_num
 
@@ -210,7 +214,7 @@ class BaseSTGCN(STGCNChebGraphConv):
             blocks.append([128])
         elif Ko > 0:
             blocks.append([128, 128])
-        blocks.append([1])
+        blocks.append([n_pred])
 
         args = STGCNConfig(
             n_his=n_his,

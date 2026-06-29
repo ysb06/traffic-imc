@@ -1,14 +1,3 @@
-"""
-AGCRN Model implementation.
-
-AGCRN (Adaptive Graph Convolutional Recurrent Network) consists of:
-1. AVWDCRNN encoder: Stacked AGCRN cells for temporal encoding
-2. CNN predictor: Maps hidden states to multi-step predictions
-
-Reference:
-    Bai, L., et al. "Adaptive Graph Convolutional Recurrent Network 
-    for Traffic Forecasting." NeurIPS 2020.
-"""
 import torch
 import torch.nn as nn
 from typing import Tuple, List
@@ -17,19 +6,6 @@ from .layers import AGCRNCell
 
 
 class AVWDCRNN(nn.Module):
-    """Adaptive View-Weighted Diffusion Convolutional RNN.
-    
-    Multi-layer recurrent encoder using AGCRN cells.
-    
-    Args:
-        node_num: Number of nodes
-        dim_in: Input feature dimension
-        dim_out: Hidden state dimension
-        cheb_k: Order of Chebyshev polynomials
-        embed_dim: Node embedding dimension
-        num_layers: Number of AGCRN layers (default: 1)
-    """
-    
     def __init__(
         self, 
         node_num: int, 
@@ -58,18 +34,6 @@ class AVWDCRNN(nn.Module):
         init_state: torch.Tensor, 
         node_embeddings: torch.Tensor
     ) -> Tuple[torch.Tensor, List[torch.Tensor]]:
-        """Forward pass through encoder.
-        
-        Args:
-            x: Input tensor of shape (B, T, N, D)
-            init_state: Initial hidden states of shape (num_layers, B, N, hidden_dim)
-            node_embeddings: Node embeddings of shape (N, embed_dim)
-            
-        Returns:
-            Tuple of:
-            - outputs: All hidden states of shape (B, T, N, hidden_dim)
-            - output_hidden: Final hidden state for each layer
-        """
         assert x.shape[2] == self.node_num and x.shape[3] == self.input_dim
         
         seq_length = x.shape[1]
@@ -96,14 +60,6 @@ class AVWDCRNN(nn.Module):
         return current_inputs, output_hidden
     
     def init_hidden(self, batch_size: int) -> torch.Tensor:
-        """Initialize hidden states for all layers.
-        
-        Args:
-            batch_size: Batch size
-            
-        Returns:
-            Tensor of shape (num_layers, B, N, hidden_dim)
-        """
         init_states = []
         for i in range(self.num_layers):
             init_states.append(self.dcrnn_cells[i].init_hidden_state(batch_size))
@@ -111,37 +67,12 @@ class AVWDCRNN(nn.Module):
 
 
 class AGCRN(nn.Module):
-    """Adaptive Graph Convolutional Recurrent Network.
-    
-    Complete AGCRN model for traffic prediction with:
-    - Learnable node embeddings for adaptive graph construction
-    - AVWDCRNN encoder for spatiotemporal feature extraction
-    - CNN-based predictor for multi-step forecasting
-    
-    Args:
-        num_nodes: Number of nodes in the graph
-        input_dim: Input feature dimension (default: 1)
-        output_dim: Output feature dimension (default: 1)
-        horizon: Prediction horizon (default: 1)
-        rnn_units: Hidden dimension of RNN (default: 64)
-        num_layers: Number of RNN layers (default: 2)
-        embed_dim: Node embedding dimension (default: 10)
-        cheb_k: Order of Chebyshev polynomials (default: 2)
-    
-    Input:
-        source: (B, T_in, N, D) - Input sequence
-        targets: (B, T_out, N, D) - Target sequence (optional, for teacher forcing)
-        
-    Output:
-        (B, horizon, N, output_dim) - Predicted sequence
-    """
-    
     def __init__(
         self,
         num_nodes: int,
         input_dim: int = 1,
         output_dim: int = 1,
-        horizon: int = 1,
+        horizon: int = 24,
         rnn_units: int = 64,
         num_layers: int = 2,
         embed_dim: int = 10,
@@ -179,6 +110,15 @@ class AGCRN(nn.Module):
             kernel_size=(1, rnn_units), 
             bias=True
         )
+
+        self.reset_parameters()
+
+    def reset_parameters(self) -> None:
+        for param in self.parameters():
+            if param.dim() > 1:
+                nn.init.xavier_uniform_(param)
+            else:
+                nn.init.uniform_(param)
     
     def forward(
         self, 
@@ -186,16 +126,6 @@ class AGCRN(nn.Module):
         targets: torch.Tensor = None, 
         teacher_forcing_ratio: float = 0.0
     ) -> torch.Tensor:
-        """Forward pass.
-        
-        Args:
-            source: Input tensor of shape (B, T_in, N, D)
-            targets: Target tensor of shape (B, T_out, N, D) - unused in this implementation
-            teacher_forcing_ratio: Probability of using teacher forcing - unused
-            
-        Returns:
-            Predictions of shape (B, horizon, N, output_dim)
-        """
         batch_size = source.shape[0]
         
         # Initialize hidden states

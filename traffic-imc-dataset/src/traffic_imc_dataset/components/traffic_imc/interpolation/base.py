@@ -37,7 +37,6 @@ class TimeMeanFillInterpolator(Interpolator):
             ].fillna(mean_value)
 
         return s_filled
-        # Historical note: a previous variant produced questionable values.
 
     def _interpolate(self, df: pd.DataFrame) -> pd.DataFrame:
         result = df.apply(self._fill_na_with_same_time, axis=0)
@@ -50,8 +49,6 @@ class ShiftFillInterpolator(Interpolator):
         self.periods = periods
 
     def _fill_na_with_shifted(self, s: pd.Series) -> pd.Series:
-        """Optimized helper that fills missing values from historical periods."""
-        # Fast path when there is no missing value
         if not s.isna().any():
             return s
 

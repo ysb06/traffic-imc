@@ -65,7 +65,7 @@ class DecoderModel(nn.Module, Seq2SeqAttrs):
         nn.Module.__init__(self)
         Seq2SeqAttrs.__init__(self, adj_mx, **model_kwargs)
         self.output_dim = int(model_kwargs.get('output_dim', 1))
-        self.horizon = int(model_kwargs.get('horizon', 1))  # for the decoder
+        self.horizon = int(model_kwargs.get('horizon', 24))  # for the decoder
         self.projection_layer = nn.Linear(self.rnn_units, self.output_dim)
         self.dcgru_layers = nn.ModuleList(
             [DCGRUCell(self.rnn_units, adj_mx, self.max_diffusion_step, self.num_nodes,
@@ -145,7 +145,12 @@ class DCRNNModel(nn.Module, Seq2SeqAttrs):
                                                                       decoder_hidden_state)
             decoder_input = decoder_output
             outputs.append(decoder_output)
-            if self.training and self.use_curriculum_learning:
+            if (
+                self.training
+                and self.use_curriculum_learning
+                and labels is not None
+                and batches_seen is not None
+            ):
                 c = np.random.uniform(0, 1)
                 if c < self._compute_sampling_threshold(batches_seen):
                     decoder_input = labels[t]

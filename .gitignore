@@ -208,4 +208,5 @@ __marimo__/
 
 # Others
 .DS_Store
-datasets/
+.vscode/
+*.lock

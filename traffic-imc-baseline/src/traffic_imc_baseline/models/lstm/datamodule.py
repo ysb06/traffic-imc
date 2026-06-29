@@ -5,20 +5,26 @@ import lightning as L
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.preprocessing import MinMaxScaler
+from sklearn.preprocessing import StandardScaler
 from torch import Tensor
 from torch.utils.data import DataLoader
-from tqdm import tqdm
+
+from traffic_imc_baseline.training.runtime import should_pin_memory
 from traffic_imc_dataset.components import MissingMasks
 from traffic_imc_dataset.components.traffic_imc.traffic_data import get_raw
 
-from .dataset import TrafficMultiSensorDataType, TrafficMultiSensorDataset
+from .dataset import (
+    TrafficMultiSensorDataType,
+    TrafficMultiSensorDataset,
+    TrafficMultiSensorTestDataType,
+)
 
 logger = logging.getLogger(__name__)
 
 TrainCollateInput = List[TrafficMultiSensorDataType]
+TestCollateInput = List[TrafficMultiSensorDataType | TrafficMultiSensorTestDataType]
 TrainBatchType = Tuple[Tensor, Tensor]
-TestBatchType = Tuple[Tensor, Tensor, List[bool]]
+TestBatchType = Tuple[Tensor, Tensor, Tensor] | Tuple[Tensor, Tensor, Tensor, Tensor]
 
 
 def collate_lstm_train(batch: TrainCollateInput) -> TrainBatchType:
@@ -30,14 +36,25 @@ def collate_lstm_train(batch: TrainCollateInput) -> TrainBatchType:
     return xs_t, ys_t
 
 
-def collate_lstm_test(batch: TrainCollateInput) -> TestBatchType:
+def collate_lstm_test(batch: TestCollateInput) -> TestBatchType:
     xs = [item[0] for item in batch]
     ys = [item[1] for item in batch]
     y_is_missing_list = [item[2] for item in batch]
+    has_sensor_idx = len(batch[0]) == 4
 
     xs_t = torch.stack([torch.from_numpy(x).float() for x in xs], dim=0)
     ys_t = torch.stack([torch.from_numpy(y).float() for y in ys], dim=0)
-    return xs_t, ys_t, y_is_missing_list
+    y_missing_t = torch.stack(
+        [
+            torch.from_numpy(y_is_missing.copy()).bool()
+            for y_is_missing in y_is_missing_list
+        ],
+        dim=0,
+    )
+    if has_sensor_idx:
+        sensor_idx_t = torch.tensor([int(item[3]) for item in batch], dtype=torch.long)
+        return xs_t, ys_t, y_missing_t, sensor_idx_t
+    return xs_t, ys_t, y_missing_t
 
 
 class LSTMDataModule(L.LightningDataModule):
@@ -54,13 +71,13 @@ class LSTMDataModule(L.LightningDataModule):
         test_missing_path: str,
         train_val_split: float = 0.8,
         seq_length: int = 24,
+        pred_length: int = 24,
         batch_size: int = 512,
         num_workers: int = 0,
-        shuffle_training: bool = True,
-        scale_method: Optional[Literal["normal", "strict", "none"]] = "normal",
+        shuffle_training: bool = False,
         allow_nan: bool = False,
         collate_fn: Callable[[TrainCollateInput], TrainBatchType] = collate_lstm_train,
-        test_collate_fn: Callable[[TrainCollateInput], TestBatchType] = collate_lstm_test,
+        test_collate_fn: Callable[[TestCollateInput], TestBatchType] = collate_lstm_test,
     ):
         super().__init__()
         self.training_dataset_path = training_dataset_path
@@ -69,25 +86,22 @@ class LSTMDataModule(L.LightningDataModule):
         self.train_val_split = train_val_split
 
         self.seq_length = seq_length
+        self.pred_length = pred_length
         self.batch_size = batch_size
         self.num_workers = num_workers
         self.shuffle_training = shuffle_training
-        self.scale_method = scale_method
         self.allow_nan = allow_nan
 
         self.collate_fn = collate_fn
         self.test_collate_fn = test_collate_fn
 
-        self._scaler: Optional[MinMaxScaler] = None
+        self._scaler: Optional[StandardScaler] = None
         self.train_dataset: Optional[TrafficMultiSensorDataset] = None
         self.val_dataset: Optional[TrafficMultiSensorDataset] = None
         self.test_dataset: Optional[TrafficMultiSensorDataset] = None
 
     @property
-    def scaler(self) -> Optional[MinMaxScaler]:
-        if self.scale_method in (None, "none"):
-            return None
-
+    def scaler(self) -> Optional[StandardScaler]:
         if self._scaler is None:
             logger.info("Scaler not found. Creating scaler from training data...")
             train_df, _ = self._load_training_data()
@@ -123,39 +137,16 @@ class LSTMDataModule(L.LightningDataModule):
         return test_df, missing_mask
 
     def _prepare_scaler(self, train_df: pd.DataFrame) -> None:
-        if self.scale_method in (None, "none"):
-            self._scaler = None
-            return
-
-        if self.scale_method == "strict":
-            temp_dataset = TrafficMultiSensorDataset(
-                train_df,
-                seq_length=self.seq_length,
-                allow_nan=self.allow_nan,
-            )
-            ref_data = self._get_strict_scaler_data(temp_dataset)
-        else:
-            ref_data = train_df.to_numpy().reshape(-1, 1)
-            ref_data = ref_data[~np.isnan(ref_data).any(axis=1)]
+        ref_data = train_df.to_numpy().reshape(-1, 1)
+        ref_data = ref_data[~np.isnan(ref_data).any(axis=1)]
 
         if len(ref_data) == 0:
             raise ValueError("No valid data available to fit scaler.")
 
-        self._scaler = MinMaxScaler(feature_range=(0, 1))
+        self._scaler = StandardScaler()
         self._scaler.fit(ref_data)
 
-    def _get_strict_scaler_data(self, dataset: TrafficMultiSensorDataset) -> np.ndarray:
-        data_list: list[np.ndarray] = []
-        for i in tqdm(range(len(dataset)), desc="Extracting strict scaler data"):
-            x, y, _ = dataset[i]
-            data_list.append(x)
-            data_list.append(y.reshape(1, 1))
-        return np.concatenate(data_list, axis=0).reshape(-1, 1)
-
     def _apply_scaling(self, *datasets: TrafficMultiSensorDataset) -> None:
-        if self.scale_method in (None, "none"):
-            return
-
         if self._scaler is None:
             raise ValueError("Scaler is not initialized.")
 
@@ -173,18 +164,22 @@ class LSTMDataModule(L.LightningDataModule):
         self.train_dataset = TrafficMultiSensorDataset(
             train_df,
             seq_length=self.seq_length,
+            pred_length=self.pred_length,
             allow_nan=self.allow_nan,
         )
         self.val_dataset = TrafficMultiSensorDataset(
             val_df,
             seq_length=self.seq_length,
+            pred_length=self.pred_length,
             allow_nan=self.allow_nan,
         )
         self.test_dataset = TrafficMultiSensorDataset(
             test_df,
             seq_length=self.seq_length,
+            pred_length=self.pred_length,
             allow_nan=self.allow_nan,
             missing_mask=test_missing_mask,
+            include_sensor_idx=True,
         )
 
         self._prepare_scaler(train_df)
@@ -205,6 +200,7 @@ class LSTMDataModule(L.LightningDataModule):
             shuffle=self.shuffle_training,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
+            pin_memory=should_pin_memory(),
             collate_fn=self.collate_fn,
         )
 
@@ -218,6 +214,7 @@ class LSTMDataModule(L.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
+            pin_memory=should_pin_memory(),
             collate_fn=self.collate_fn,
         )
 
@@ -231,5 +228,6 @@ class LSTMDataModule(L.LightningDataModule):
             shuffle=False,
             num_workers=self.num_workers,
             persistent_workers=self.num_workers > 0,
+            pin_memory=should_pin_memory(),
             collate_fn=self.test_collate_fn,
         )

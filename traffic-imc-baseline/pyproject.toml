@@ -15,7 +15,10 @@ dependencies = [
     "scipy>=1.11.0",
     "tqdm>=4.66.0",
     "tables>=3.9.0",
+    "openpyxl>=3.1.0",
     "wandb>=0.17.0",
+    "pydantic>=2.10.0",
+    "torchinfo>=1.8.0",
 ]
 requires-python = ">=3.11"
 readme = "README.md"
@@ -31,4 +34,8 @@ distribution = false
 [tool.pdm.dev-dependencies]
 dev = [
     "-e file:///${PROJECT_ROOT}/../traffic-imc-dataset#egg=traffic-imc-dataset",
+    "pytest>=8.0",
 ]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
